@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVLink 2 Decode</title>
+<style>
+  :root{
+    --bg:#05080a; --panel:#0a1014; --grid:#0f1a1f;
+    --ink:#9fb3bd; --dim:#3c5059; --faint:#1c2a30;
+    --cyan:#28e0d4; --amber:#ffb340; --green:#54f08a; --mag:#ff5db1;
+    --red:#ff4d5e; --wire:#13242b;
+    --mono:"SFMono-Regular",ui-monospace,"Cascadia Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono)}
+  body{
+    min-height:100vh; padding:22px 16px 40px;
+    background-image:
+      linear-gradient(transparent 95%, rgba(40,224,212,.04) 95%),
+      radial-gradient(1200px 600px at 70% -10%, rgba(40,224,212,.06), transparent 60%);
+    background-size:100% 3px, 100% 100%;
+    display:flex; justify-content:center;
+  }
+  .stage{width:100%; max-width:1080px}
+  /* header */
+  .top{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    border-bottom:1px solid var(--wire); padding-bottom:10px; margin-bottom:18px}
+  .mark{color:var(--cyan); letter-spacing:.14em; font-size:13px}
+  .mark b{color:#eafcff}
+  .sub{color:var(--dim); font-size:11px; letter-spacing:.08em}
+  .tag{margin-left:auto; color:var(--amber); font-size:10.5px; letter-spacing:.14em;
+    border:1px solid rgba(255,179,64,.3); padding:3px 8px; border-radius:3px}
+  .blink{animation:bl 1.1s steps(1) infinite}
+  @keyframes bl{50%{opacity:.25}}
+
+  /* layout */
+  .cols{display:grid; grid-template-columns:1fr 272px; gap:18px}
+  @media(max-width:760px){ .cols{grid-template-columns:1fr} }
+
+  .label{font-size:10px; letter-spacing:.18em; color:var(--dim); margin:0 0 9px}
+
+  /* byte buffer */
+  .buf{position:relative; background:var(--panel); border:1px solid var(--wire);
+    border-radius:6px; padding:16px 0 12px; overflow:hidden}
+  .track{position:relative; will-change:transform; padding-left:14px}
+  .scan{position:absolute; top:6px; bottom:30px; width:2px; background:var(--cyan);
+    box-shadow:0 0 14px 3px rgba(40,224,212,.7); opacity:.0; pointer-events:none; z-index:5}
+  .scan::before{content:""; position:absolute; top:-5px; left:-4px; width:10px; height:10px;
+    background:var(--cyan); border-radius:50%; box-shadow:0 0 12px 3px rgba(40,224,212,.9)}
+  .row{display:flex; flex-wrap:nowrap; gap:5px}
+  .cell{width:40px; height:50px; border:1px solid var(--faint); border-radius:4px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:#070d10; transition:border-color .18s, background .18s, box-shadow .18s; position:relative}
+  .cell .hex{font-size:14px; color:var(--dim); letter-spacing:.04em; transition:color .18s}
+  .cell .bin{font-size:7.5px; color:#16242a; margin-top:3px; letter-spacing:.5px; transition:color .18s}
+  .cell .idx{position:absolute; top:-14px; font-size:8px; color:#1d2c33}
+  .cell.seen{background:#081613; border-color:#13332a}
+  .cell.seen .hex{color:var(--green)}
+  .cell.seen .bin{color:#1f4a3a}
+  .cell.g-hdr.seen{background:#06181c; border-color:#124049}
+  .cell.g-hdr.seen .hex{color:var(--cyan)}
+  .cell.g-hdr.seen .bin{color:#17434a}
+  .cell.g-crc.seen{background:#1a0a16; border-color:#4a1538}
+  .cell.g-crc.seen .hex{color:var(--mag)}
+  .cell.g-crc.seen .bin{color:#4a1b38}
+  .cell.live{border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan),0 0 18px rgba(40,224,212,.5);
+    background:#0c2026; transform:translateY(-1px)}
+  .cell.live .hex{color:#eafcff}
+  .cell.live .bin{color:var(--cyan)}
+
+  /* field brackets under buffer */
+  .fieldbar{display:flex; flex-wrap:nowrap; gap:5px; margin-top:7px}
+  .seg{height:16px; border-radius:0 0 4px 4px; border:1px solid var(--faint); border-top:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:8px; letter-spacing:.1em; color:#243840; opacity:.4; transition:opacity .2s,color .2s,border-color .2s}
+  .seg.on{opacity:1}
+  .seg.g-hdr.on{color:var(--cyan); border-color:#124049}
+  .seg.g-pay.on{color:var(--amber); border-color:#5a4010}
+  .seg.g-crc.on{color:var(--mag); border-color:#4a1538}
+
+  /* readout */
+  .readout{background:var(--panel); border:1px solid var(--wire); border-radius:6px;
+    padding:14px 16px; margin-top:18px; min-height:150px}
+  .ro-field{font-size:11px; letter-spacing:.14em; color:var(--amber)}
+  .ro-raw{font-size:20px; margin:10px 0 2px; color:#eafcff; letter-spacing:.08em; word-break:break-all}
+  .ro-raw .op{color:var(--dim)}
+  .ro-bin{font-size:11px; color:var(--cyan); letter-spacing:.14em; margin-bottom:12px; min-height:14px}
+  .ro-mean{font-size:15px; color:var(--green); line-height:1.5}
+  .ro-mean .big{color:#eafcff; font-size:17px}
+  .ro-cite{font-size:9.5px; color:var(--dim); margin-top:11px; letter-spacing:.05em;
+    border-top:1px dashed var(--wire); padding-top:9px}
+
+  /* right rail: spec + log */
+  .rail{display:flex; flex-direction:column; gap:14px}
+  .spec{background:var(--panel); border:1px solid var(--wire); border-radius:6px; padding:13px 14px}
+  .spec h4{margin:0 0 9px; font-size:9.5px; letter-spacing:.18em; color:var(--cyan); font-weight:400}
+  .spec pre{margin:0; font-size:9.5px; line-height:1.55; color:#5e7781; white-space:pre-wrap}
+  .spec .cite{display:block; margin-top:9px; color:var(--dim); font-size:9px}
+  .log{background:var(--panel); border:1px solid var(--wire); border-radius:6px; padding:12px 13px; flex:1}
+  .log h4{margin:0 0 8px; font-size:9.5px; letter-spacing:.18em; color:var(--green); font-weight:400}
+  .log .lines{font-size:10px; line-height:1.7; color:#3f565e}
+  .log .lines div{opacity:0; transform:translateX(-4px); transition:opacity .25s,transform .25s}
+  .log .lines div.show{opacity:1; transform:none}
+  .log .ok{color:var(--green)}
+  .log .ca{color:var(--cyan)}
+  .log .am{color:var(--amber)}
+
+  /* crc demo */
+  .crc{margin-top:18px; background:var(--panel); border:1px solid var(--wire); border-radius:6px; padding:15px 16px;
+    opacity:.32; transition:opacity .4s}
+  .crc.live{opacity:1; border-color:#2a3b42}
+  .crc h4{margin:0 0 12px; font-size:10px; letter-spacing:.16em; color:var(--mag); font-weight:400}
+  .crc-rows{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:620px){ .crc-rows{grid-template-columns:1fr} }
+  .crc-box{border:1px solid var(--faint); border-radius:5px; padding:12px 13px; background:#070d10}
+  .crc-box .t{font-size:10px; letter-spacing:.1em; color:var(--dim); margin-bottom:8px}
+  .crc-box .seed{font-size:12px; margin-bottom:6px}
+  .crc-box .val{font-size:22px; letter-spacing:.06em}
+  .crc-box .res{font-size:11px; margin-top:8px; letter-spacing:.1em}
+  .crc-good{border-color:#164c3a}
+  .crc-good .seed{color:var(--ink)} .crc-good .val{color:var(--green)} .crc-good .res{color:var(--green)}
+  .crc-bad .seed{color:var(--ink)} .crc-bad .val{color:var(--red)} .crc-bad .res{color:var(--red)}
+  .crc-bad.lit{border-color:#5a1a24}
+  .crc-note{font-size:10px; color:var(--dim); margin-top:12px; line-height:1.6}
+  .crc-note b{color:var(--amber)}
+  .foot{margin-top:16px; font-size:9px; color:#22343b; letter-spacing:.1em; text-align:center}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top">
+    <div class="mark"><b>TENSORUST</b> // SKUNKWORKS</div>
+    <div class="sub">mavlink-tlog v0.1.4 &nbsp;·&nbsp; real frame, encoded + parsed by the crate</div>
+    <div class="tag">MAVLINK 2 <span class="blink">▍</span></div>
+  </div>
+
+  <div class="cols">
+    <div class="main">
+      <p class="label">WIRE BUFFER · 40 BYTES · 0xFD … CRC</p>
+      <div class="buf" id="buf">
+        <div class="scan" id="scan"></div>
+        <div class="track" id="track">
+          <div class="row" id="row"></div>
+          <div class="fieldbar" id="fieldbar"></div>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="ro-field" id="roField">AWAITING SYNC…</div>
+        <div class="ro-raw" id="roRaw">—</div>
+        <div class="ro-bin" id="roBin"></div>
+        <div class="ro-mean" id="roMean">The decoder walks the buffer left to right. Each field lights up, its raw bytes resolve to a value, and the checksum is verified against the message CRC_EXTRA.</div>
+        <div class="ro-cite" id="roCite">spec: MAVLink 2 packet framing · mavlink.io/en/guide/serialization</div>
+      </div>
+
+      <div class="crc" id="crcDemo">
+        <h4>WHY CRC_EXTRA MATTERS — SAME BYTES, TWO DIALECTS</h4>
+        <div class="crc-rows">
+          <div class="crc-box crc-good">
+            <div class="t">RIGHT DIALECT · GLOBAL_POSITION_INT (#33)</div>
+            <div class="seed">CRC-16/MCRF4XX( bytes[1..38] ) + seed <b>104</b></div>
+            <div class="val">0x7419</div>
+            <div class="res" id="crcGoodRes">≡ frame CRC 0x7419 · PASS</div>
+          </div>
+          <div class="crc-box crc-bad" id="crcBadBox">
+            <div class="t">WRONG DIALECT · seed for ATTITUDE (#30)</div>
+            <div class="seed">CRC-16/MCRF4XX( bytes[1..38] ) + seed <b>39</b></div>
+            <div class="val" id="crcBadVal">0x————</div>
+            <div class="res" id="crcBadRes">&nbsp;</div>
+          </div>
+        </div>
+        <div class="crc-note">
+          The CRC_EXTRA seed is a hash of the message's <b>field names and types</b>. A receiver whose
+          message definition disagrees by one field computes a different seed, so the very same wire bytes
+          fail the checksum. That is how MAVLink refuses to decode a frame it would otherwise misread.
+        </div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="spec">
+        <h4>MAVLINK 2 PACKET</h4>
+<pre>STX   0xFD      start
+LEN   u8        payload bytes
+INC   u8        incompat flags
+CMP   u8        compat flags
+SEQ   u8        sequence
+SID   u8        system id
+CID   u8        component id
+MID   u24 le    message id
+PAY   LEN       payload
+CRC   u16 le    checksum
+[SIG  13        if INC&0x01]</pre>
+        <span class="cite">cite: mavlink.io/en/guide/serialization</span>
+      </div>
+      <div class="spec">
+        <h4>MSG #33 PAYLOAD</h4>
+<pre>time_boot_ms u32  ms
+lat          i32  degE7
+lon          i32  degE7
+alt          i32  mm (MSL)
+relative_alt i32  mm (AGL)
+vx vy vz     i16  cm/s
+hdg          u16  cdeg</pre>
+        <span class="cite">cite: common.xml · GLOBAL_POSITION_INT</span>
+      </div>
+      <div class="log">
+        <h4>DECODE LOG</h4>
+        <div class="lines" id="logLines"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">bytes emitted by mavlink_tlog::encode(V2) · verified by FrameRef::parse(Strict) · offline, no external calls</div>
+</div>
+
+<script>
+// ---- REAL FRAME (hardcoded from the crate run) ----------------------------
+// mavlink_tlog::encode(Version::V2, GLOBAL_POSITION_INT #33) ->
+// FD1C00002A01012100004E61BC004A52401C932118054072 0700D0070000 7800D3FF0A00 CC5B 1974
+const BYTES = [0xFD,0x1C,0x00,0x00,0x2A,0x01,0x01,0x21,0x00,0x00,
+  0x4E,0x61,0xBC,0x00, 0x4A,0x52,0x40,0x1C, 0x93,0x21,0x18,0x05, 0x40,0x72,0x07,0x00,
+  0xD0,0x07,0x00,0x00, 0x78,0x00, 0xD3,0xFF, 0x0A,0x00, 0xCC,0x5B, 0x19,0x74];
+
+// Field map: [start, len, group, name, logtag, build(readout)]
+const G_HDR='g-hdr', G_PAY='g-pay', G_CRC='g-crc';
+const hx = (a)=>a.map(b=>b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+const FIELDS = [
+  {s:0,l:1,g:G_HDR,n:'STX · START-OF-FRAME',
+    raw:'0xFD', bin:'1111 1101',
+    mean:'<span class="big">0xFD</span> = MAVLink <b>2</b> start byte. (0xFE would be MAVLink 1.)',
+    cite:'mavlink 2 framing · byte[0] = magic', log:['ca','STX  0xFD  MAVLink 2 sync']},
+  {s:1,l:1,g:G_HDR,n:'LEN · PAYLOAD LENGTH',
+    raw:'0x1C', bin:'0001 1100',
+    mean:'<span class="big">0x1C = 28</span> payload bytes follow the 10-byte header.',
+    cite:'byte[1] = payload length', log:['ca','LEN  28 payload bytes']},
+  {s:2,l:1,g:G_HDR,n:'INCOMPAT FLAGS',
+    raw:'0x00', bin:'0000 0000',
+    mean:'<span class="big">0x00</span> = no incompatible flags. Bit 0 (0x01) would mark the frame <b>SIGNED</b> (+13 bytes).',
+    cite:'byte[2] = incompat_flags · 0x01 = MAVLINK_IFLAG_SIGNED', log:['ca','INC  0x00  unsigned']},
+  {s:3,l:1,g:G_HDR,n:'COMPAT FLAGS',
+    raw:'0x00', bin:'0000 0000',
+    mean:'<span class="big">0x00</span> = no compatible flags set.',
+    cite:'byte[3] = compat_flags', log:['ca','CMP  0x00']},
+  {s:4,l:1,g:G_HDR,n:'SEQ · SEQUENCE',
+    raw:'0x2A', bin:'0010 1010',
+    mean:'<span class="big">0x2A = 42</span>. Wraps 0-255; gaps reveal packet loss per sender.',
+    cite:'byte[4] = seq', log:['ca','SEQ  42']},
+  {s:5,l:1,g:G_HDR,n:'SYSID · SYSTEM ID',
+    raw:'0x01', bin:'0000 0001',
+    mean:'<span class="big">0x01</span> = system 1 (the vehicle).',
+    cite:'byte[5] = sysid', log:['ca','SID  system 1']},
+  {s:6,l:1,g:G_HDR,n:'CID · COMPONENT ID',
+    raw:'0x01', bin:'0000 0001',
+    mean:'<span class="big">0x01</span> = component 1 = MAV_COMP_ID_AUTOPILOT1.',
+    cite:'byte[6] = compid', log:['ca','CID  autopilot1']},
+  {s:7,l:3,g:G_HDR,n:'MSGID · MESSAGE ID (u24 LE)',
+    raw:'21 00 00', bin:'→ 0x000021',
+    mean:'little-endian 21 00 00 = <span class="big">33</span> → <b>GLOBAL_POSITION_INT</b> (resolved via the crate’s 392-message table).',
+    cite:'byte[7..10] = msgid, little-endian · common.xml #33', log:['am','MID  33  GLOBAL_POSITION_INT']},
+
+  {s:10,l:4,g:G_PAY,n:'time_boot_ms (u32)',
+    raw:'4E 61 BC 00', bin:'→ 0x00BC614E',
+    mean:'u32 LE = <span class="big">12,345,678</span> ms since boot (≈ 3h 25m).',
+    cite:'payload[0..4] · uint32_t milliseconds', log:['','pay  time_boot_ms = 12345678 ms']},
+  {s:14,l:4,g:G_PAY,n:'lat (i32, degE7)',
+    raw:'4A 52 40 1C', bin:'→ 0x1C40524A',
+    mean:'i32 LE = 473977418, ×1e-7 = <span class="big">47.3977418° N</span>.',
+    cite:'payload[4..8] · int32_t degrees ×1e7', log:['ok','pay  lat = 47.3977418 deg']},
+  {s:18,l:4,g:G_PAY,n:'lon (i32, degE7)',
+    raw:'93 21 18 05', bin:'→ 0x05182193',
+    mean:'i32 LE = 85467539, ×1e-7 = <span class="big">8.5467539° E</span>.',
+    cite:'payload[8..12] · int32_t degrees ×1e7', log:['ok','pay  lon = 8.5467539 deg']},
+  {s:22,l:4,g:G_PAY,n:'alt (i32, mm MSL)',
+    raw:'40 72 07 00', bin:'→ 0x00077240',
+    mean:'i32 LE = 488000 mm = <span class="big">488.000 m</span> above mean sea level.',
+    cite:'payload[12..16] · int32_t millimetres', log:['','pay  alt = 488.000 m MSL']},
+  {s:26,l:4,g:G_PAY,n:'relative_alt (i32, mm AGL)',
+    raw:'D0 07 00 00', bin:'→ 0x000007D0',
+    mean:'i32 LE = 2000 mm = <span class="big">2.000 m</span> above ground.',
+    cite:'payload[16..20] · int32_t millimetres', log:['','pay  rel_alt = 2.000 m AGL']},
+  {s:30,l:2,g:G_PAY,n:'vx (i16, cm/s)',
+    raw:'78 00', bin:'→ 0x0078',
+    mean:'i16 LE = 120 cm/s = <span class="big">+1.20 m/s</span> north.',
+    cite:'payload[20..22] · int16_t cm/s', log:['','pay  vx = +1.20 m/s N']},
+  {s:32,l:2,g:G_PAY,n:'vy (i16, cm/s)',
+    raw:'D3 FF', bin:'→ 0xFFD3 (−45)',
+    mean:'i16 LE = −45 cm/s = <span class="big">−0.45 m/s</span> east (two’s-complement).',
+    cite:'payload[22..24] · int16_t cm/s', log:['','pay  vy = -0.45 m/s E']},
+  {s:34,l:2,g:G_PAY,n:'vz (i16, cm/s)',
+    raw:'0A 00', bin:'→ 0x000A',
+    mean:'i16 LE = 10 cm/s = <span class="big">+0.10 m/s</span> down.',
+    cite:'payload[24..26] · int16_t cm/s', log:['','pay  vz = +0.10 m/s down']},
+  {s:36,l:2,g:G_PAY,n:'hdg (u16, cdeg)',
+    raw:'CC 5B', bin:'→ 0x5BCC',
+    mean:'u16 LE = 23500 centideg = <span class="big">235.00°</span> heading.',
+    cite:'payload[26..28] · uint16_t centidegrees', log:['','pay  hdg = 235.00 deg']},
+
+  {s:38,l:2,g:G_CRC,n:'CRC · CHECKSUM (u16 LE)',
+    raw:'19 74', bin:'→ 0x7419',
+    mean:'<span class="big">0x7419</span> = CRC-16/MCRF4XX over bytes[1..38], then the CRC_EXTRA seed <b>104</b> folded in. <b style="color:var(--green)">Matches → frame valid.</b>',
+    cite:'byte[38..40] = checksum · seeded with per-message CRC_EXTRA', log:['ok','CRC  0x7419  valid (seed 104)']},
+];
+
+// ---- build DOM ------------------------------------------------------------
+const row = document.getElementById('row');
+const fieldbar = document.getElementById('fieldbar');
+const cells = [];
+BYTES.forEach((b,i)=>{
+  // group class per byte
+  let g = G_PAY;
+  if(i<10) g=G_HDR; else if(i>=38) g=G_CRC;
+  const c = document.createElement('div');
+  c.className = 'cell '+g;
+  const bin = b.toString(2).padStart(8,'0');
+  c.innerHTML = `<span class="idx">${i}</span><span class="hex">${b.toString(16).toUpperCase().padStart(2,'0')}</span><span class="bin">${bin.slice(0,4)} ${bin.slice(4)}</span>`;
+  row.appendChild(c);
+  cells.push(c);
+});
+// segments
+const segEls = FIELDS.map(f=>{
+  const seg = document.createElement('div');
+  seg.className = 'seg '+f.g;
+  seg.style.width = (f.l*40 + (f.l-1)*5) + 'px';
+  seg.textContent = f.n.split(' ')[0];
+  fieldbar.appendChild(seg);
+  return seg;
+});
+
+const scan = document.getElementById('scan');
+const buf = document.getElementById('buf');
+const track = document.getElementById('track');
+const roField=document.getElementById('roField'), roRaw=document.getElementById('roRaw'),
+  roBin=document.getElementById('roBin'), roMean=document.getElementById('roMean'), roCite=document.getElementById('roCite');
+const logLines=document.getElementById('logLines');
+const crcDemo=document.getElementById('crcDemo'), crcBadBox=document.getElementById('crcBadBox'),
+  crcBadVal=document.getElementById('crcBadVal'), crcBadRes=document.getElementById('crcBadRes');
+
+// geometry: cell is 40 wide + 5 gap; track has padding-left 14
+const CW=40, GAP=5, PADL=14, CELL=CW+GAP;
+let SCAN_X = 300;                       // fixed scan-head x within the buffer
+function layout(){ SCAN_X = Math.round(Math.min(360, buf.clientWidth*0.42)); scan.style.left = SCAN_X+'px'; }
+layout(); window.addEventListener('resize', layout);
+function placeTrack(pos){
+  const tx = SCAN_X - PADL - pos*CELL - CW/2;
+  track.style.transform = 'translateX('+tx+'px)';
+}
+
+function logLine(cls,txt){
+  const d=document.createElement('div');
+  d.className = cls?cls:'';
+  d.textContent = txt;
+  logLines.appendChild(d);
+  requestAnimationFrame(()=>d.classList.add('show'));
+  // cap height
+  while(logLines.children.length>18) logLines.removeChild(logLines.firstChild);
+}
+
+// ---- timeline -------------------------------------------------------------
+const STEP = 230;              // ms per byte
+const WALK = BYTES.length*STEP; // walk duration
+const HOLD1 = 900;             // pause after last field
+const CRC_T = 3400;            // crc demo duration
+const HOLD2 = 1600;            // final hold
+const LOOP = WALK + HOLD1 + CRC_T + HOLD2;
+
+let shownFields = new Set();
+let scrambleUntil = 0, scrambleCell = -1;
+
+function fieldAt(byteIdx){
+  for(const f of FIELDS){ if(byteIdx>=f.s && byteIdx<f.s+f.l) return f; }
+  return null;
+}
+function activateField(fi){
+  const f = FIELDS[fi];
+  roField.textContent = f.n;
+  roRaw.innerHTML = f.raw.replace(/→/g,'<span class="op">→</span>');
+  roBin.textContent = f.bin;
+  roMean.innerHTML = f.mean;
+  roCite.textContent = 'spec: '+f.cite;
+  segEls[fi].classList.add('on');
+  if(!shownFields.has(fi)){ shownFields.add(fi); logLine(f.log[0], f.log[1]); }
+}
+function resetCycle(){
+  cells.forEach(c=>c.classList.remove('seen','live'));
+  segEls.forEach(s=>s.classList.remove('on'));
+  shownFields = new Set();
+  logLines.innerHTML='';
+  roField.textContent='AWAITING SYNC…'; roRaw.textContent='—'; roBin.textContent='';
+  roMean.innerHTML='The decoder walks the buffer left to right. Each field lights up, its raw bytes resolve to a value, and the checksum is verified against the message CRC_EXTRA.';
+  roCite.textContent='spec: MAVLink 2 packet framing · mavlink.io/en/guide/serialization';
+  crcDemo.classList.remove('live'); crcBadBox.classList.remove('lit');
+  crcBadVal.textContent='0x————'; crcBadRes.innerHTML='&nbsp;';
+}
+
+let t0 = performance.now();
+let lastByte = -1;
+function frame(now){
+  let t = (now - t0) % LOOP;
+  if(t < lastT) { resetCycle(); }  // wrapped
+  lastT = t;
+
+  if(t < WALK){
+    const pos = t/STEP;                 // float byte position
+    const byteIdx = Math.min(BYTES.length-1, Math.floor(pos));
+    // filmstrip scrolls under the fixed scan head
+    placeTrack(pos);
+    scan.style.opacity = .9;
+    // cell states
+    cells.forEach((c,i)=>{
+      if(i<byteIdx) { c.classList.add('seen'); c.classList.remove('live'); }
+      else if(i===byteIdx){ c.classList.add('live'); }
+      else { c.classList.remove('seen','live'); }
+    });
+    // bit-flip scramble on the live byte (first ~90ms of its step)
+    const frac = pos - byteIdx;
+    const live = cells[byteIdx];
+    const binEl = live.querySelector('.bin');
+    if(frac < 0.42){
+      const r = Math.random()<.5?0:1;
+      let s=''; for(let k=0;k<8;k++){ s += (Math.random()<.5?'0':'1'); if(k===3)s+=' '; }
+      binEl.textContent = s;
+    } else {
+      const real = BYTES[byteIdx].toString(2).padStart(8,'0');
+      binEl.textContent = real.slice(0,4)+' '+real.slice(4);
+    }
+    // field readout when we enter a new byte
+    if(byteIdx !== lastByte){
+      lastByte = byteIdx;
+      const fi = FIELDS.findIndex(f=> byteIdx>=f.s && byteIdx<f.s+f.l);
+      if(fi>=0) activateField(fi);
+    }
+  } else {
+    // past walk: everything seen, strip parks showing the CRC under the head
+    cells.forEach(c=>{ c.classList.add('seen'); c.classList.remove('live'); });
+    cells[BYTES.length-1].classList.add('live');
+    cells[BYTES.length-2].classList.add('live');
+    placeTrack(BYTES.length-1.5);
+    scan.style.opacity = .35;
+    lastByte = -1;
+    const tc = t - WALK - HOLD1;
+    if(tc >= 0){
+      crcDemo.classList.add('live');
+      // reveal wrong-dialect crc progressively
+      if(tc > 500){ crcBadVal.textContent='0xCEEA'; }
+      if(tc > 1000){ crcBadBox.classList.add('lit'); crcBadRes.innerHTML='≠ frame CRC 0x7419 · <b>FAIL</b>'; }
+      if(tc > 1200 && !shownFields.has('crc')){
+        shownFields.add('crc');
+        logLine('am','seed 39 (ATTITUDE) → 0xCEEA ≠ 0x7419  REJECT');
+      }
+      // keep crc readout in the main panel too
+      if(tc > 500){
+        roField.textContent='CRC_EXTRA · DIALECT CHECK';
+        roRaw.innerHTML='0x7419 <span class="op">vs</span> 0xCEEA';
+        roBin.textContent='seed 104 vs seed 39';
+        roMean.innerHTML='Same 40 wire bytes. Right dialect (seed <b>104</b>) → <b style="color:var(--green)">0x7419 PASS</b>. Wrong dialect (seed <b>39</b>) → <b style="color:var(--red)">0xCEEA FAIL</b>.';
+        roCite.textContent='spec: CRC_EXTRA = hash of message field names + types';
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+let lastT = 0;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

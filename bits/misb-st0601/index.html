@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ST 0601 KLV Decode</title>
+<style>
+  :root{
+    --bg:#070b0e; --bg2:#0b1116; --grid:#16222b; --dim:#2b3a44;
+    --ink:#c9d6dd; --ink2:#7d93a0; --faint:#4a5b66;
+    --key:#39e0ff; --len:#ffb454; --time:#ffd166; --text:#7CF29B;
+    --ang2:#ff79c6; --spos:#ff9f45; --fpos:#49e6c7;
+    --alt:#ffe066; --ver:#8ab4ff; --csum:#ff5d6c; --csok:#49f08a;
+    --scan:#eaffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 78% -10%, #0d1a20 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #0a141a 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"SFMono-Regular",ui-monospace,"Cascadia Mono","JetBrains Mono",Consolas,"Liberation Mono",Menlo,monospace;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 16px 40px}
+  .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--grid);padding-bottom:12px}
+  .brand{font-size:12px;letter-spacing:.28em;color:var(--ink2);text-transform:uppercase}
+  h1{font-size:19px;margin:6px 0 2px;letter-spacing:.02em;color:var(--ink)}
+  h1 b{color:var(--key);font-weight:600}
+  .sub{font-size:12px;color:var(--faint);letter-spacing:.04em}
+  .stamp{text-align:right;font-size:11px;color:var(--ink2);line-height:1.7}
+  .stamp .ok{color:var(--csok)}
+  .stamp .k{color:var(--key)}
+
+  .main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:22px;margin-top:20px}
+  @media(max-width:860px){.main{grid-template-columns:1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--bg2),#070d11);border:1px solid var(--grid);border-radius:10px;padding:16px}
+  .ptitle{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink2);margin-bottom:12px;display:flex;justify-content:space-between}
+  .ptitle .c{color:var(--faint)}
+
+  /* byte grid */
+  .buf{display:grid;grid-template-columns:repeat(20,1fr);gap:4px}
+  .cell{position:relative;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+    font-size:12px;border-radius:3px;background:#0a1318;border:1px solid var(--grid);
+    color:var(--faint);transition:color .18s,background .18s,border-color .18s,box-shadow .18s}
+  .cell .idx{position:absolute;top:1px;left:3px;font-size:7px;color:#223039;letter-spacing:0}
+  .cell.resolved{color:var(--ink)}
+  .cell.hdr{opacity:.92}
+  .cell.scanning{color:var(--scan);background:#122026;border-color:var(--scan);
+    box-shadow:0 0 10px rgba(234,255,255,.55),inset 0 0 8px rgba(234,255,255,.22);z-index:2}
+  .cell.cat-key.resolved{color:var(--key);border-color:#15424d;background:#071b20}
+  .cell.cat-len.resolved{color:var(--len);border-color:#43351a;background:#1a1407}
+  .cell.cat-time.resolved{color:var(--time);border-color:#403612}
+  .cell.cat-text.resolved{color:var(--text);border-color:#1c3a28}
+  .cell.cat-ang.resolved{color:var(--ang2);border-color:#3c1f31}
+  .cell.cat-spos.resolved{color:var(--spos);border-color:#3f2a14}
+  .cell.cat-fpos.resolved{color:var(--fpos);border-color:#133a34}
+  .cell.cat-alt.resolved{color:var(--alt);border-color:#3b3514}
+  .cell.cat-ver.resolved{color:var(--ver);border-color:#223050}
+  .cell.cat-csum.resolved{color:var(--csum);border-color:#3f1c22}
+  .cell.cat-csum.ok{color:var(--csok);border-color:#164f30;background:#07150e}
+  .cell.tagb.resolved{outline:1px solid rgba(255,255,255,.08);background:#0d161b;filter:brightness(.82)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:14px;font-size:10px;color:var(--ink2);letter-spacing:.05em}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  /* decode stream */
+  .stream{display:flex;flex-direction:column;gap:8px;min-height:360px}
+  .row{border:1px solid var(--grid);border-left-width:3px;border-radius:6px;padding:9px 11px;background:#080f14;
+    opacity:0;transform:translateY(7px);transition:opacity .35s,transform .35s,border-color .35s}
+  .row.on{opacity:1;transform:none}
+  .row .r1{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .tag{font-size:10px;color:#05121a;background:var(--faint);border-radius:3px;padding:1px 6px;font-weight:700;letter-spacing:.04em}
+  .name{font-size:13px;color:var(--ink);letter-spacing:.01em}
+  .arrow{color:var(--faint);font-size:12px}
+  .val{font-size:13px;color:#fff;margin-left:auto;font-weight:600}
+  .r2{display:flex;justify-content:space-between;gap:10px;margin-top:5px;font-size:10.5px;color:var(--ink2)}
+  .r2 .math{color:var(--faint)}
+  .r2 .cite{color:var(--ink2);white-space:nowrap}
+  .r2 .cite b{color:var(--ink2);font-weight:600}
+  .raw{font-size:10px;color:var(--faint);margin-top:4px;letter-spacing:.08em}
+
+  .row.cat-key{border-left-color:var(--key)} .row.cat-key .tag{background:var(--key)}
+  .row.cat-len{border-left-color:var(--len)} .row.cat-len .tag{background:var(--len)}
+  .row.cat-time{border-left-color:var(--time)} .row.cat-time .tag{background:var(--time)}
+  .row.cat-text{border-left-color:var(--text)} .row.cat-text .tag{background:var(--text)}
+  .row.cat-ang{border-left-color:var(--ang2)} .row.cat-ang .tag{background:var(--ang2)}
+  .row.cat-spos{border-left-color:var(--spos)} .row.cat-spos .tag{background:var(--spos)}
+  .row.cat-fpos{border-left-color:var(--fpos)} .row.cat-fpos .tag{background:var(--fpos)}
+  .row.cat-alt{border-left-color:var(--alt)} .row.cat-alt .tag{background:var(--alt)}
+  .row.cat-ver{border-left-color:var(--ver)} .row.cat-ver .tag{background:var(--ver)}
+  .row.cat-csum{border-left-color:var(--csum)} .row.cat-csum .tag{background:var(--csum)}
+  .row.cat-csum.ok{border-left-color:var(--csok)} .row.cat-csum.ok .tag{background:var(--csok)} .row.cat-csum.ok .val{color:var(--csok)}
+
+  .foot{margin-top:22px;border-top:1px solid var(--grid);padding-top:10px;font-size:10.5px;color:var(--faint);
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;letter-spacing:.04em}
+  .foot .k{color:var(--ink2)}
+  .cur{color:var(--scan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="brand">TENSORUST // SKUNKWORKS &nbsp;&bull;&nbsp; byte-level decode</div>
+      <h1>MISB <b>ST&nbsp;0601</b> UAS Datalink Local Set &mdash; live KLV walk</h1>
+      <div class="sub">100 real bytes emitted by the <b style="color:var(--ink2)">misb</b> crate encoder, decoded tag by tag. checksum verified.</div>
+    </div>
+    <div class="stamp">
+      key <span class="k">06 0E 2B 34 ...</span><br>
+      <span id="cursorlbl">cursor 00</span> / 100 bytes<br>
+      checksum <span class="ok">0x66B0 OK</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <div class="ptitle"><span>raw buffer // hex</span><span class="c" id="scanstate">standby</span></div>
+      <div class="buf" id="buf"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--key)"></i>UL key</span>
+        <span><i class="dot" style="background:var(--len)"></i>BER len</span>
+        <span><i class="dot" style="background:var(--time)"></i>timestamp</span>
+        <span><i class="dot" style="background:var(--text)"></i>text</span>
+        <span><i class="dot" style="background:var(--ang2)"></i>attitude</span>
+        <span><i class="dot" style="background:var(--spos)"></i>sensor pos</span>
+        <span><i class="dot" style="background:var(--fpos)"></i>frame center</span>
+        <span><i class="dot" style="background:var(--alt)"></i>altitude</span>
+        <span><i class="dot" style="background:var(--csok)"></i>checksum</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle"><span>decoder output</span><span class="c">field &rarr; meaning</span></div>
+      <div class="stream" id="stream"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="k">source: misb::st0601::Builder.finish() &bull; 16-byte UL per SMPTE ST 336 &bull; LDS tags per MISB ST 0601.19</span>
+    <span>decoder at byte <span class="cur" id="footcur">0</span> &bull; <span id="footstate">idle</span></span>
+  </div>
+</div>
+
+<script>
+// ---- REAL packet: 100 bytes emitted by the misb crate (ST 0601 Builder) ----
+// hex verbatim from `cargo run` output; checksum 0x66B0 verified by Packet::parse.
+const HEX = "06 0e 2b 34 02 0b 01 01 0e 01 03 01 01 00 00 00 53 02 08 00 06 1a db 2b d8 00 00 03 0a 54 45 4e 53 4f 52 55 53 54 31 05 02 69 e2 06 02 15 cc 07 02 fb 34 0a 08 53 4b 55 4e 4b 2d 52 51 0d 04 37 89 1d 32 0e 04 c9 53 1b 60 0f 02 1b c4 17 04 37 83 e3 ae 18 04 c9 50 97 51 19 02 0d 6a 41 01 13 01 02 66 b0";
+const BYTES = HEX.trim().split(/\s+/).map(h=>parseInt(h,16));
+
+// Fields in packet order. s=start byte, ve=end (exclusive), vo=value start.
+// cat drives colour. tag/name/val/math/cite are the REAL decode.
+const F = [
+  {s:0,ve:16,vo:0,cat:"key",tag:"UL",name:"Universal Label",val:"UAS Datalink Local Set",
+   math:"06 0E 2B 34 02 0B 01 01 . 0E 01 03 01 01 00 00 00",
+   cite:"SMPTE ST 336 16-byte key · MISB ST 0601"},
+  {s:16,ve:17,vo:16,cat:"len",tag:"LEN",name:"BER length",val:"83 bytes follow",
+   math:"0x53 = 83 (short form, high bit clear)",
+   cite:"SMPTE ST 336 BER length"},
+  {s:17,ve:27,vo:19,cat:"time",tag:"2",name:"Precision Time Stamp",val:"2024-06-14 15:21:36 UTC",
+   math:"0x00061ADB2BD80000 = 1718378496000000 µs since 1970",
+   cite:"ST 0601 Tag 2 · uint64 µs"},
+  {s:27,ve:39,vo:29,cat:"text",tag:"3",name:"Mission ID",val:"“TENSORUST1”",
+   math:"54 45 4E 53 4F 52 55 53 54 31 = ASCII",
+   cite:"ST 0601 Tag 3 · text"},
+  {s:39,ve:43,vo:41,cat:"ang",tag:"5",name:"Platform Heading Angle",val:"148.8999°",
+   math:"0x69E2 = 27106 → 27106 × 360 / 65535",
+   cite:"ST 0601 Tag 5 · uint16 0..360°"},
+  {s:43,ve:47,vo:45,cat:"ang",tag:"6",name:"Platform Pitch Angle",val:"3.4058°",
+   math:"0x15CC = 5580 → 5580 × 40 / 65534",
+   cite:"ST 0601 Tag 6 · int16 ±20°"},
+  {s:47,ve:51,vo:49,cat:"ang",tag:"7",name:"Platform Roll Angle",val:"−1.8738°",
+   math:"0xFB34 = −1228 → −1228 × 100 / 65534",
+   cite:"ST 0601 Tag 7 · int16 ±50°"},
+  {s:51,ve:61,vo:53,cat:"text",tag:"10",name:"Platform Designation",val:"“SKUNK-RQ”",
+   math:"53 4B 55 4E 4B 2D 52 51 = ASCII",
+   cite:"ST 0601 Tag 10 · text"},
+  {s:61,ve:67,vo:63,cat:"spos",tag:"13",name:"Sensor Latitude",val:"39.048470°",
+   math:"0x37891D32 = 931957042 → × 180 / (2³²−2)",
+   cite:"ST 0601 Tag 13 · int32 ±90°"},
+  {s:67,ve:73,vo:69,cat:"spos",tag:"14",name:"Sensor Longitude",val:"−76.887230°",
+   math:"0xC9531B60 = −917717152 → × 360 / (2³²−2)",
+   cite:"ST 0601 Tag 14 · int32 ±180°"},
+  {s:73,ve:77,vo:75,cat:"alt",tag:"15",name:"Sensor True Altitude",val:"1258.38 m",
+   math:"0x1BC4 = 7108 → 7108 × 19900/65535 − 900",
+   cite:"ST 0601 Tag 15 · uint16 −900..19000 m"},
+  {s:77,ve:83,vo:79,cat:"fpos",tag:"23",name:"Frame Center Latitude",val:"39.034120°",
+   math:"0x3783E3AE = 931019694 → × 180 / (2³²−2)",
+   cite:"ST 0601 Tag 23 · int32 ±90°"},
+  {s:83,ve:89,vo:85,cat:"fpos",tag:"24",name:"Frame Center Longitude",val:"−76.901050°",
+   math:"0xC9509751 = −917882543 → × 360 / (2³²−2)",
+   cite:"ST 0601 Tag 24 · int32 ±180°"},
+  {s:89,ve:93,vo:91,cat:"alt",tag:"25",name:"Frame Center Elevation",val:"142.75 m",
+   math:"0x0D6A = 3434 → 3434 × 19900/65535 − 900",
+   cite:"ST 0601 Tag 25 · uint16 −900..19000 m"},
+  {s:93,ve:96,vo:95,cat:"ver",tag:"65",name:"UAS LS Version Number",val:"19 (ST 0601.19)",
+   math:"0x13 = 19",
+   cite:"ST 0601 Tag 65 · uint"},
+  {s:96,ve:100,vo:98,cat:"csum",tag:"1",name:"Checksum",val:"0x66B0  VALID",
+   math:"16-bit running sum of bytes 0..97 = 0x66B0 ✓",
+   cite:"ST 0601 Tag 1 · 16-bit BCC"},
+];
+
+// map each byte -> field index + whether it is a header byte (tag/len) or value
+const fieldOf = new Array(BYTES.length).fill(-1);
+const isHdr = new Array(BYTES.length).fill(false);
+F.forEach((f,i)=>{ for(let b=f.s;b<f.ve;b++){ fieldOf[b]=i; isHdr[b]=(b<f.vo); } });
+
+// ---- build byte grid ----
+const buf = document.getElementById("buf");
+const cells = [];
+BYTES.forEach((v,i)=>{
+  const c = document.createElement("div");
+  const fi = fieldOf[i];
+  c.className = "cell cat-"+F[fi].cat + (isHdr[i]?" tagb":"");
+  c.innerHTML = '<span class="idx">'+i+'</span>'+v.toString(16).padStart(2,"0").toUpperCase();
+  c.dataset.real = v.toString(16).padStart(2,"0").toUpperCase();
+  buf.appendChild(c);
+  cells.push(c);
+});
+
+// ---- build decode stream rows ----
+const stream = document.getElementById("stream");
+const rows = F.map(f=>{
+  const r = document.createElement("div");
+  r.className = "row cat-"+f.cat;
+  const raw = BYTES.slice(f.s,f.ve).map(b=>b.toString(16).padStart(2,"0")).join(" ");
+  r.innerHTML =
+    '<div class="r1"><span class="tag">'+f.tag+'</span><span class="name">'+f.name+'</span>'+
+    '<span class="arrow">&rarr;</span><span class="val">'+f.val+'</span></div>'+
+    '<div class="r2"><span class="math">'+f.math+'</span><span class="cite"><b>'+f.cite+'</b></span></div>'+
+    '<div class="raw">bytes ['+f.s+'..'+(f.ve-1)+']  '+raw+'</div>';
+  stream.appendChild(r);
+  return r;
+});
+
+// ---- animation ----
+const HEXC="0123456789ABCDEF";
+const cursorlbl=document.getElementById("cursorlbl");
+const scanstate=document.getElementById("scanstate");
+const footcur=document.getElementById("footcur");
+const footstate=document.getElementById("footstate");
+
+const SPEED=0.014;      // bytes per ms (~70ms/byte)
+const PAUSE=560;        // ms hold when a field resolves
+const ENDHOLD=1900;     // ms hold at end before loop
+let cursor=0, last=performance.now(), pauseUntil=0, resolved=0, ended=0;
+
+function reset(){
+  cursor=0; resolved=0; ended=0; pauseUntil=0; last=performance.now();
+  cells.forEach(c=>c.classList.remove("resolved","scanning","ok"));
+  rows.forEach(r=>r.classList.remove("on","ok"));
+}
+
+function flicker(idx){
+  // pre-resolve shimmer on the byte under the scan head; settles to real value
+  const c=cells[idx];
+  c.textContent="";
+  const idxSpan='<span class="idx">'+idx+'</span>';
+  const a=HEXC[(Math.random()*16)|0], b=HEXC[(Math.random()*16)|0];
+  c.innerHTML=idxSpan+a+b;
+}
+function settle(idx){
+  const c=cells[idx];
+  c.innerHTML='<span class="idx">'+idx+'</span>'+c.dataset.real;
+}
+
+function frame(now){
+  const dt=now-last; last=now;
+
+  if(ended){
+    if(now>=pauseUntil) reset();
+    requestAnimationFrame(frame); return;
+  }
+
+  if(now>=pauseUntil){
+    cursor+=dt*SPEED;
+    if(cursor>BYTES.length) cursor=BYTES.length;
+  }
+  const head=Math.min(BYTES.length-1, Math.floor(cursor));
+
+  // resolve any field fully passed by the cursor
+  while(resolved<F.length && cursor>=F[resolved].ve){
+    const f=F[resolved];
+    for(let b=f.s;b<f.ve;b++){ cells[b].classList.add("resolved"); cells[b].classList.remove("scanning"); settle(b); }
+    const r=rows[resolved];
+    r.classList.add("on");
+    if(f.cat==="csum"){ r.classList.add("ok"); for(let b=f.s;b<f.ve;b++) cells[b].classList.add("ok"); }
+    r.scrollIntoView({block:"nearest",behavior:"smooth"});
+    resolved++;
+    pauseUntil=now+PAUSE;
+  }
+
+  // scan head highlight + shimmer on unresolved bytes up to head
+  cells.forEach((c,i)=>{
+    if(c.classList.contains("resolved")) return;
+    if(i===head){ c.classList.add("scanning"); flicker(i); }
+    else if(i<head){ c.classList.add("scanning"); flicker(i); }
+    else { c.classList.remove("scanning"); settle(i); }
+  });
+
+  const cur=Math.min(BYTES.length,Math.floor(cursor));
+  cursorlbl.textContent="cursor "+String(cur).padStart(2,"0");
+  footcur.textContent=cur;
+  const fi=fieldOf[Math.min(head,BYTES.length-1)];
+  scanstate.textContent = resolved>=F.length ? "complete" : "walking · "+F[fi].name.toLowerCase();
+  footstate.textContent = resolved>=F.length ? "checksum verified ✓ loop" : "decoding tag "+F[fi].tag;
+
+  if(resolved>=F.length && !ended){ ended=1; pauseUntil=now+ENDHOLD; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

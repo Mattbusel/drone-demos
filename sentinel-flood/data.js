@@ -1,0 +1,207 @@
+window.SENTINEL_DATA = {
+  "flood": {
+    "confidence": 1.0,
+    "level": "flooded"
+  },
+  "generated_by": "remoteid-scenario 0.1.0 (flood) -> remoteid-sentinel 0.1.0 (receive-only detector), over remoteid 0.3.3",
+  "geometry": {
+    "fake_claimed_pos": [
+      40.7126,
+      -74.0065
+    ],
+    "fake_distinct_positions": 1,
+    "fake_id_count": 500,
+    "fake_serials_sample": [
+      "15819FAKE00000",
+      "15819FAKE00001",
+      "15819FAKE00002",
+      "15819FAKE00003",
+      "15819FAKE00004",
+      "15819FAKE00005",
+      "15819FAKE00006",
+      "15819FAKE00007",
+      "15819FAKE00008",
+      "15819FAKE00009",
+      "15819FAKE00010",
+      "15819FAKE00011",
+      "15819FAKE00012",
+      "15819FAKE00013",
+      "15819FAKE00014",
+      "15819FAKE00015"
+    ],
+    "fanout_distinct_ids_per_source": {
+      "02:00:00:00:77:77": 1,
+      "02:00:00:00:F0:00": 500
+    },
+    "genuine_serial": "1581CREAL7A4F2C91",
+    "genuine_track": [
+      [
+        40.7128,
+        -74.006
+      ],
+      [
+        40.7128,
+        -74.0059289
+      ],
+      [
+        40.7128,
+        -74.0058578
+      ],
+      [
+        40.7128,
+        -74.0057867
+      ],
+      [
+        40.7128,
+        -74.0057156
+      ],
+      [
+        40.7128,
+        -74.0056445
+      ],
+      [
+        40.7128,
+        -74.0055734
+      ],
+      [
+        40.7128,
+        -74.0055022
+      ],
+      [
+        40.7128,
+        -74.0054311
+      ],
+      [
+        40.7128,
+        -74.00536
+      ],
+      [
+        40.7128,
+        -74.0052889
+      ],
+      [
+        40.7128,
+        -74.0052178
+      ],
+      [
+        40.7128,
+        -74.0051467
+      ],
+      [
+        40.7128,
+        -74.0050756
+      ],
+      [
+        40.7128,
+        -74.0050045
+      ],
+      [
+        40.7128,
+        -74.0049334
+      ],
+      [
+        40.7128,
+        -74.0048623
+      ],
+      [
+        40.7128,
+        -74.0047912
+      ],
+      [
+        40.7128,
+        -74.0047201
+      ],
+      [
+        40.7128,
+        -74.004649
+      ]
+    ],
+    "genuine_tx": "02:00:00:00:77:77",
+    "operator_pos": [
+      40.7121,
+      -74.007
+    ]
+  },
+  "most_likely_real": {
+    "fake_signals": [],
+    "genuine_reasons": [
+      "consistent moving track with sane kinematics",
+      "single stable identity, no per-source fan-out",
+      "serial sits outside the templated fake block"
+    ],
+    "per_unit": {
+      "auth": "none",
+      "reasons": [
+        "system_clock_drift"
+      ],
+      "score": 0.3499999940395355,
+      "spoofer": null,
+      "verdict": "suspicious"
+    },
+    "real_score": 0.9000000357627869,
+    "transmitter": "02:00:00:00:77:77",
+    "transmitter_kind": "ble",
+    "uas_id": "1581CREAL7A4F2C91"
+  },
+  "note": "Flood verdict, per-track scores, signatures, per-unit verdicts/reasons and the most-likely-real pick are the sentinel's real output. Track geometry is derived directly from the generated frames. No radio, no transmit path.",
+  "scenario": {
+    "address_mode": "Shared",
+    "counter_mode": "Lockstep",
+    "fake_count": 500,
+    "frames_per_s": 2,
+    "genuine_serial": "1581CREAL7A4F2C91",
+    "kind": "flood",
+    "serial_template": "1581|FAKE####  (sequential=true)",
+    "shared_tsf": true,
+    "total_frames_decoded": 40080,
+    "window_s": 10
+  },
+  "track_count": 2,
+  "tracks": [
+    {
+      "fake_signals": [
+        "one_source_many_ids",
+        "templated_serial",
+        "per_unit_spoofed_or_suspicious"
+      ],
+      "genuine_reasons": [
+        "consistent moving track with sane kinematics"
+      ],
+      "per_unit": {
+        "auth": "none",
+        "reasons": [
+          "counter_conflict",
+          "system_clock_drift"
+        ],
+        "score": 0.0,
+        "spoofer": null,
+        "verdict": "spoofed"
+      },
+      "real_score": 0.0,
+      "transmitter": "02:00:00:00:F0:00",
+      "transmitter_kind": "ble",
+      "uas_id": "15819FAKE00499"
+    },
+    {
+      "fake_signals": [],
+      "genuine_reasons": [
+        "consistent moving track with sane kinematics",
+        "single stable identity, no per-source fan-out",
+        "serial sits outside the templated fake block"
+      ],
+      "per_unit": {
+        "auth": "none",
+        "reasons": [
+          "system_clock_drift"
+        ],
+        "score": 0.3499999940395355,
+        "spoofer": null,
+        "verdict": "suspicious"
+      },
+      "real_score": 0.9000000357627869,
+      "transmitter": "02:00:00:00:77:77",
+      "transmitter_kind": "ble",
+      "uas_id": "1581CREAL7A4F2C91"
+    }
+  ]
+};

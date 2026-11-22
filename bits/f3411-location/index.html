@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F3411 Location Decode</title>
+<style>
+  :root{
+    --bg:#070b0d; --panel:#0c1316; --panel2:#0a1013; --grid:#13201f;
+    --ink:#c9ffe6; --dim:#4f6f66; --dim2:#2f463f;
+    --amber:#ffcf5a; --green:#39ff9f; --cyan:#53e2ff; --red:#ff5d6c;
+    --wire:#1d3330; --glow: #39ff9f;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 700px at 72% -10%, #0e1b1a 0%, transparent 60%),
+      radial-gradient(900px 600px at 10% 120%, #0b1517 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--mono);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  /* faint scanline/CRT texture */
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply; opacity:.35;
+  }
+  .wrap{
+    position:relative; width:100%; height:100%;
+    display:grid; grid-template-columns: 1fr 340px;
+    grid-template-rows: auto 1fr; gap:14px; padding:18px 20px;
+    max-width:1280px; margin:0 auto;
+  }
+  header{grid-column:1 / -1; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap}
+  .brand{font-weight:700; letter-spacing:.14em; color:var(--green); text-shadow:0 0 14px rgba(57,255,159,.35)}
+  .sub{color:var(--dim); font-size:12px; letter-spacing:.06em}
+  .spec{margin-left:auto; color:var(--amber); font-size:11px; letter-spacing:.05em; opacity:.85}
+  .tag{color:var(--cyan)}
+
+  .left{grid-column:1; display:flex; flex-direction:column; gap:14px; min-width:0}
+  .right{grid-column:2; display:flex; flex-direction:column; gap:14px; min-width:0}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--wire); border-radius:10px; padding:14px 15px;
+    box-shadow:inset 0 0 0 1px rgba(57,255,159,.03), 0 10px 30px rgba(0,0,0,.4);
+  }
+  .card h2{
+    margin:0 0 10px; font-size:10.5px; font-weight:600; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--dim); display:flex; gap:8px; align-items:center;
+  }
+  .card h2 .hint{color:var(--dim2); letter-spacing:.04em; text-transform:none; margin-left:auto; font-size:10px}
+
+  /* ---- byte buffer ---- */
+  .bufwrap{position:relative; overflow:hidden}
+  .buf{display:grid; grid-template-columns:repeat(25, 1fr); gap:4px; position:relative}
+  .cell{
+    position:relative; text-align:center; padding:9px 0 18px; border-radius:6px;
+    background:#0a1114; border:1px solid var(--grid); color:#7fb6a4;
+    font-size:15px; letter-spacing:.04em; transition:
+      background .18s, color .18s, border-color .18s, box-shadow .18s, transform .18s;
+  }
+  .cell .idx{
+    position:absolute; left:0; right:0; bottom:3px; font-size:8.5px; color:var(--dim2);
+    letter-spacing:.02em;
+  }
+  .cell.active{
+    color:#04140d; background:var(--green); border-color:var(--green);
+    box-shadow:0 0 16px rgba(57,255,159,.55); transform:translateY(-2px);
+  }
+  .cell.active .idx{color:#0a3b28}
+  .cell.done{color:var(--green); border-color:#1c4b3b; background:#0b1a16}
+  .cell.flip{color:var(--amber); border-color:var(--amber); background:#161206}
+  .scan{
+    position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px;
+    background:linear-gradient(180deg,transparent, var(--green), transparent);
+    box-shadow:0 0 18px 3px rgba(57,255,159,.5); pointer-events:none; opacity:.9;
+  }
+
+  /* ---- bit lane ---- */
+  .bits{display:flex; gap:5px; flex-wrap:wrap; align-items:center; min-height:34px}
+  .byteblock{display:flex; gap:3px; padding:5px 6px; border-radius:6px; background:#0a1114; border:1px solid var(--grid)}
+  .bit{
+    width:17px; height:22px; display:flex; align-items:center; justify-content:center;
+    font-size:12px; border-radius:3px; background:#0c1719; color:#3f5f57; border:1px solid #11201d;
+  }
+  .bit.one{background:#0e2b22; color:var(--green); border-color:#1d5a46; box-shadow:0 0 8px rgba(57,255,159,.25)}
+  .bit.flip{color:var(--amber); border-color:#5a4a1d; background:#211a08}
+  .byteblock .lbl{align-self:center; font-size:9px; color:var(--dim); margin-left:4px; letter-spacing:.04em}
+
+  /* ---- resolve focus ---- */
+  .focus{min-height:150px}
+  .fhead{display:flex; align-items:baseline; gap:10px; margin-bottom:8px}
+  .fname{font-size:16px; color:var(--ink); font-weight:700}
+  .frange{font-size:11px; color:var(--dim)}
+  .fval{margin-left:auto; font-size:20px; color:var(--amber); text-shadow:0 0 16px rgba(255,207,90,.35)}
+  .math{font-size:13px; line-height:1.9; color:#9fe8cf}
+  .math .op{color:var(--dim)}
+  .math .raw{color:var(--cyan)}
+  .math .out{color:var(--amber)}
+  .math .nib{color:var(--green)}
+  .cite{margin-top:10px; font-size:10.5px; color:var(--dim); border-top:1px dashed var(--dim2); padding-top:8px; letter-spacing:.02em}
+  .cite b{color:var(--amber); font-weight:600}
+
+  /* ---- log ---- */
+  .log{font-size:12px; line-height:1.65; max-height:280px; overflow:hidden}
+  .row{display:flex; gap:8px; padding:3px 0; opacity:.25; transition:opacity .35s}
+  .row.on{opacity:1}
+  .row .k{color:var(--dim); min-width:88px}
+  .row .v{color:var(--green)}
+  .row .u{color:var(--dim)}
+
+  /* ---- map ---- */
+  .maphead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px}
+  .coord{font-size:12px; color:var(--cyan)}
+  .mapbox{position:relative; height:150px; border-radius:8px; overflow:hidden; border:1px solid var(--grid); background:
+    radial-gradient(400px 200px at 50% 120%, #0d1c1a, #070d0f);}
+  .glat,.glon{position:absolute; background:rgba(57,255,159,.10)}
+  .dot{
+    position:absolute; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%;
+    background:var(--red); box-shadow:0 0 16px 4px rgba(255,93,108,.65); opacity:0; transform:scale(.3);
+  }
+  .dot .ring{position:absolute; inset:-6px; border:1px solid var(--red); border-radius:50%; opacity:.6}
+  .dotlbl{position:absolute; font-size:10px; color:#ffd7db; transform:translate(10px,-18px); white-space:nowrap}
+  .crosshair{position:absolute; color:var(--dim2); font-size:9px}
+
+  .foot{grid-column:1 / -1; display:flex; justify-content:space-between; color:var(--dim2); font-size:10px; letter-spacing:.05em}
+  .foot .ok{color:var(--green)}
+  @media (max-width:880px){
+    .wrap{grid-template-columns:1fr; grid-template-rows:auto auto auto; height:auto; min-height:100%}
+    .right{grid-column:1} .cell{font-size:12px} body{overflow:auto}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">REMOTEID // F3411 DECODE</span>
+    <span class="sub">ASTM&nbsp;F3411-22a &nbsp;Location/Vector &nbsp;<span class="tag">msg type 0x1</span> &nbsp;25 bytes</span>
+    <span class="spec" id="specTop">walking buffer&hellip;</span>
+  </header>
+
+  <div class="left">
+    <div class="card bufwrap">
+      <h2>wire buffer <span class="hint" id="bufhint">raw bytes emitted by remoteid::Location::encode()</span></h2>
+      <div class="buf" id="buf"></div>
+      <div class="scan" id="scan"></div>
+    </div>
+
+    <div class="card">
+      <h2>bit lane <span class="hint" id="bitfield">&nbsp;</span></h2>
+      <div class="bits" id="bits"></div>
+    </div>
+
+    <div class="card focus">
+      <h2>resolve</h2>
+      <div class="fhead">
+        <span class="fname" id="fname">&mdash;</span>
+        <span class="frange" id="frange"></span>
+        <span class="fval" id="fval"></span>
+      </div>
+      <div class="math" id="fmath"></div>
+      <div class="cite" id="fcite"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <h2>decoded fields</h2>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="card">
+      <div class="maphead">
+        <h2 style="margin:0">position fix</h2>
+        <span class="coord" id="coord">lat&hairsp;/&hairsp;lon &mdash;</span>
+      </div>
+      <div class="mapbox" id="mapbox">
+        <div class="crosshair" style="left:6px;top:6px">N</div>
+        <div class="dot" id="dot"><div class="ring"></div><div class="dotlbl" id="dotlbl"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>source: remoteid v0.3.3 &nbsp;&middot;&nbsp; <span id="footbytes"></span></span>
+    <span class="ok" id="footok">CRC n/a at F3411 layer &middot; integrity checked at BT5/Wi-Fi transport</span>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// REAL DATA. Produced by running remoteid::Location::encode() (remoteid v0.3.3)
+// on a Location/Vector built with the values shown, then Message::decode()'d
+// back. Emitter + raw output archived during build. Nothing here is invented.
+//
+//   BYTES_HEX 12 22 23 31 04 4B 52 40 1C 42 F4 17 05 86 0B 9F 0B 89 08 4A 42 71 34 02 00
+//
+// Field offsets below are exactly those the crate reads in Location::decode()
+// (src/message.rs), matching the ASTM F3411-22a Location/Vector layout.
+// ============================================================================
+const BYTES = [0x12,0x22,0x23,0x31,0x04,0x4B,0x52,0x40,0x1C,0x42,0xF4,0x17,0x05,0x86,0x0B,0x9F,0x0B,0x89,0x08,0x4A,0x42,0x71,0x34,0x02,0x00];
+const hx = b => b.toString(16).toUpperCase().padStart(2,'0');
+
+// Each field: byte range [a,b] inclusive, name, resolved value, the real math,
+// the F3411 citation. `log` is the short line for the decoded-fields panel.
+const FIELDS = [
+  { a:0,b:0, name:"Header", val:"Location v2",
+    field:"type:4 | version:4",
+    math:`byte[0] = <span class="raw">0x12</span> = <span class="nib">0001</span> <span class="nib">0010</span><br>`+
+         `high nibble <span class="op">&rarr;</span> message type <span class="out">1</span> = Location/Vector<br>`+
+         `low nibble <span class="op">&rarr;</span> protocol version <span class="out">2</span>`,
+    cite:"<b>F3411-22a &sect;Message header</b>: 1 byte, 4-bit Message Type + 4-bit Protocol Version.",
+    log:["header","Location v2",""] },
+
+  { a:1,b:1, name:"Status + flags", val:"Airborne",
+    field:"status:4 | rsvd:1 | htype:1 | E/W:1 | smul:1",
+    math:`byte[1] = <span class="raw">0x22</span> = <span class="nib">0010</span> 0 <span class="nib">0</span> <span class="nib">1</span> <span class="nib">0</span><br>`+
+         `status <span class="op">&rarr;</span> <span class="out">2</span> = Airborne &nbsp; height-type <span class="op">&rarr;</span> <span class="out">0</span> = Above Takeoff<br>`+
+         `E/W segment bit <span class="op">&rarr;</span> <span class="out">1</span> &nbsp; speed-multiplier bit <span class="op">&rarr;</span> <span class="out">0</span>`,
+    cite:"<b>F3411-22a &sect;Location, byte 1</b>: Op-Status[7:4], Height-Type[2], E/W Dir[1], Speed-Mult[0].",
+    log:["status","Airborne",""] },
+
+  { a:2,b:2, name:"Track direction", val:"215&deg;",
+    field:"track direction (+180 if E/W bit)",
+    math:`byte[2] = <span class="raw">0x23</span> = <span class="raw">35</span><br>`+
+         `E/W segment bit set <span class="op">&rarr;</span> <span class="raw">35</span> <span class="op">+</span> 180<br>`+
+         `track <span class="op">=</span> <span class="out">215&deg;</span> clockwise from true north`,
+    cite:"<b>F3411-22a &sect;Track Direction</b>: 0&ndash;179 in the byte; add 180&deg; when the E/W bit is set (0&ndash;359&deg;).",
+    log:["track","215","°"] },
+
+  { a:3,b:3, name:"Ground speed", val:"12.25 m/s",
+    field:"speed (step depends on multiplier bit)",
+    math:`byte[3] = <span class="raw">0x31</span> = <span class="raw">49</span><br>`+
+         `speed-multiplier bit = 0 <span class="op">&rarr;</span> step 0.25 m/s<br>`+
+         `<span class="raw">49</span> <span class="op">&times;</span> 0.25 <span class="op">=</span> <span class="out">12.25 m/s</span>`,
+    cite:"<b>F3411-22a &sect;Speed</b>: &times;0.25 m/s up to 63.75, then &times;0.75 m/s (multiplier bit).",
+    log:["speed","12.25","m/s"] },
+
+  { a:4,b:4, name:"Vertical speed", val:"+2.0 m/s",
+    field:"signed int8, 0.5 m/s steps",
+    math:`byte[4] = <span class="raw">0x04</span> = int8 <span class="raw">4</span><br>`+
+         `<span class="raw">4</span> <span class="op">&times;</span> 0.5 <span class="op">=</span> <span class="out">+2.0 m/s</span> (positive = climbing)`,
+    cite:"<b>F3411-22a &sect;Vertical Speed</b>: signed int8, 0.5 m/s per count, &plusmn;62 m/s.",
+    log:["vert speed","+2.0","m/s"] },
+
+  { a:5,b:8, name:"Latitude", val:"47.3977419&deg;", map:"lat",
+    field:"int32 little-endian, &times;10⁷",
+    math:`bytes[5..9] = <span class="raw">4B 52 40 1C</span> &nbsp;(little-endian)<br>`+
+         `reorder <span class="op">&rarr;</span> <span class="raw">1C 40 52 4B</span> = int32 <span class="raw">473 977 419</span><br>`+
+         `<span class="raw">473977419</span> <span class="op">&divide;</span> 10⁷ <span class="op">=</span> <span class="out">47.3977419&deg;</span>`,
+    cite:"<b>F3411-22a &sect;Latitude</b>: int32, degrees &times;10⁷, little-endian on the wire.",
+    log:["latitude","47.3977419","°"] },
+
+  { a:9,b:12, name:"Longitude", val:"8.5455938&deg;", map:"lon",
+    field:"int32 little-endian, &times;10⁷",
+    math:`bytes[9..13] = <span class="raw">42 F4 17 05</span> &nbsp;(little-endian)<br>`+
+         `reorder <span class="op">&rarr;</span> <span class="raw">05 17 F4 42</span> = int32 <span class="raw">85 455 938</span><br>`+
+         `<span class="raw">85455938</span> <span class="op">&divide;</span> 10⁷ <span class="op">=</span> <span class="out">8.5455938&deg;</span>`,
+    cite:"<b>F3411-22a &sect;Longitude</b>: int32, degrees &times;10⁷, little-endian on the wire.",
+    log:["longitude","8.5455938","°"] },
+
+  { a:13,b:14, name:"Pressure altitude", val:"475.0 m",
+    field:"uint16 LE, 0.5 m steps from -1000 m",
+    math:`bytes[13..15] = <span class="raw">86 0B</span> <span class="op">&rarr;</span> uint16 <span class="raw">2950</span><br>`+
+         `<span class="raw">2950</span> <span class="op">&times;</span> 0.5 <span class="op">-</span> 1000 <span class="op">=</span> <span class="out">475.0 m</span>`,
+    cite:"<b>F3411-22a &sect;Pressure Altitude</b>: uint16, 0.5 m/count, -1000 m offset (raw 0 = unknown).",
+    log:["baro alt","475.0","m"] },
+
+  { a:15,b:16, name:"Geodetic altitude", val:"487.5 m",
+    field:"uint16 LE, WGS84, 0.5 m steps",
+    math:`bytes[15..17] = <span class="raw">9F 0B</span> <span class="op">&rarr;</span> uint16 <span class="raw">2975</span><br>`+
+         `<span class="raw">2975</span> <span class="op">&times;</span> 0.5 <span class="op">-</span> 1000 <span class="op">=</span> <span class="out">487.5 m</span> above ellipsoid`,
+    cite:"<b>F3411-22a &sect;Geodetic Altitude</b>: uint16, 0.5 m/count, -1000 m offset, WGS84.",
+    log:["geo alt","487.5","m"] },
+
+  { a:17,b:18, name:"Height", val:"92.5 m",
+    field:"uint16 LE, above takeoff, 0.5 m steps",
+    math:`bytes[17..19] = <span class="raw">89 08</span> <span class="op">&rarr;</span> uint16 <span class="raw">2185</span><br>`+
+         `<span class="raw">2185</span> <span class="op">&times;</span> 0.5 <span class="op">-</span> 1000 <span class="op">=</span> <span class="out">92.5 m</span> above takeoff`,
+    cite:"<b>F3411-22a &sect;Height</b>: uint16, 0.5 m/count, -1000 m offset; reference set by Height-Type bit.",
+    log:["height","92.5","m"] },
+
+  { a:19,b:19, name:"Accuracy A", val:"H10 / V4",
+    field:"vert acc:4 | horiz acc:4",
+    math:`byte[19] = <span class="raw">0x4A</span> = <span class="nib">0100</span> <span class="nib">1010</span><br>`+
+         `vertical accuracy code <span class="op">&rarr;</span> <span class="out">4</span><br>`+
+         `horizontal accuracy code <span class="op">&rarr;</span> <span class="out">10</span>`,
+    cite:"<b>F3411-22a &sect;Accuracy</b>: 4-bit enumerations (Vert Acc high nibble, Horiz Acc low nibble).",
+    log:["h/v acc","10 / 4","code"] },
+
+  { a:20,b:20, name:"Accuracy B", val:"S2 / B4",
+    field:"baro acc:4 | speed acc:4",
+    math:`byte[20] = <span class="raw">0x42</span> = <span class="nib">0100</span> <span class="nib">0010</span><br>`+
+         `baro-altitude accuracy code <span class="op">&rarr;</span> <span class="out">4</span><br>`+
+         `speed accuracy code <span class="op">&rarr;</span> <span class="out">2</span>`,
+    cite:"<b>F3411-22a &sect;Accuracy</b>: Baro Acc (high nibble), Speed Acc (low nibble), 4-bit codes.",
+    log:["s/b acc","2 / 4","code"] },
+
+  { a:21,b:22, name:"Timestamp", val:"1342.5 s",
+    field:"uint16 LE, 0.1 s steps, since the hour",
+    math:`bytes[21..23] = <span class="raw">71 34</span> <span class="op">&rarr;</span> uint16 <span class="raw">13425</span><br>`+
+         `<span class="raw">13425</span> <span class="op">&divide;</span> 10 <span class="op">=</span> <span class="out">1342.5 s</span> after the full UTC hour`,
+    cite:"<b>F3411-22a &sect;Timestamp</b>: uint16, tenths of a second since the last UTC hour (0xFFFF = unknown).",
+    log:["timestamp","1342.5","s"] },
+
+  { a:23,b:23, name:"Timestamp accuracy", val:"code 2",
+    field:"rsvd:4 | ts acc:4",
+    math:`byte[23] = <span class="raw">0x02</span> = <span class="nib">0000</span> <span class="nib">0010</span><br>`+
+         `low nibble <span class="op">&rarr;</span> timestamp accuracy code <span class="out">2</span> (&le;0.3 s)`,
+    cite:"<b>F3411-22a &sect;Timestamp Accuracy</b>: 4-bit code in the low nibble; high nibble reserved.",
+    log:["ts acc","2","code"] },
+
+  { a:24,b:24, name:"Reserved", val:"0x00",
+    field:"reserved",
+    math:`byte[24] = <span class="raw">0x00</span><br>reserved by the standard, sent as zero.`,
+    cite:"<b>F3411-22a &sect;Location</b>: trailing reserved byte; 25-byte message total.",
+    log:["reserved","0x00",""] },
+];
+
+// map geometry: project lat/lon into the little box (purely cosmetic framing,
+// values themselves are the real decoded degrees)
+const LAT=47.3977419, LON=8.5455938;
+
+// ---- build DOM ----
+const buf = document.getElementById('buf');
+const cells = BYTES.map((b,i)=>{
+  const d=document.createElement('div'); d.className='cell';
+  d.innerHTML = hx(b)+`<span class="idx">${i.toString(16).toUpperCase().padStart(2,'0')}</span>`;
+  buf.appendChild(d); return d;
+});
+document.getElementById('footbytes').textContent = BYTES.map(hx).join(' ');
+
+const logEl=document.getElementById('log');
+const logRows=FIELDS.map(f=>{
+  const r=document.createElement('div'); r.className='row';
+  r.innerHTML=`<span class="k">${f.log[0]}</span><span class="v">${f.log[1]}</span><span class="u">${f.log[2]}</span>`;
+  logEl.appendChild(r); return r;
+});
+
+const bitsEl=document.getElementById('bits');
+const scan=document.getElementById('scan');
+const dot=document.getElementById('dot'), dotlbl=document.getElementById('dotlbl');
+const mapbox=document.getElementById('mapbox');
+
+// crosshair grid lines in map
+for(let gx=0;gx<6;gx++){const e=document.createElement('div');e.className='glon';e.style.cssText=`left:${(gx/5)*100}%;top:0;bottom:0;width:1px`;mapbox.appendChild(e);}
+for(let gy=0;gy<4;gy++){const e=document.createElement('div');e.className='glat';e.style.cssText=`top:${(gy/3)*100}%;left:0;right:0;height:1px`;mapbox.appendChild(e);}
+
+const el=id=>document.getElementById(id);
+
+// ---- bit lane renderer ----
+function renderBits(field, settle){
+  // settle in [0,1]: 0 = all flipping (random), 1 = real bits locked
+  bitsEl.innerHTML='';
+  for(let bi=field.a; bi<=field.b && bi-field.a<4; bi++){
+    const val=BYTES[bi];
+    const block=document.createElement('div'); block.className='byteblock';
+    for(let k=7;k>=0;k--){
+      const real=(val>>k)&1;
+      const locked = Math.random() < settle;
+      const shown = locked ? real : (Math.random()<0.5?0:1);
+      const b=document.createElement('div');
+      b.className='bit'+(locked?(shown?' one':''):' flip');
+      b.textContent=shown;
+      block.appendChild(b);
+    }
+    const lbl=document.createElement('div'); lbl.className='lbl'; lbl.textContent='byte '+bi.toString(16).toUpperCase().padStart(2,'0');
+    block.appendChild(lbl);
+    bitsEl.appendChild(block);
+  }
+}
+
+// ---- timeline ----
+// Phases (fractions of the loop):
+//  0.00-0.06 intro, 0.06-0.90 walk 15 fields, 0.90-1.00 hold+reset
+const N=FIELDS.length;
+const WALK0=0.06, WALK1=0.90;
+const slot=(WALK1-WALK0)/N;
+let activeIdx=-1;
+
+function setFocus(i){
+  const f=FIELDS[i];
+  el('fname').innerHTML=f.name;
+  el('frange').textContent = f.a===f.b?`byte ${f.a}`:`bytes ${f.a}–${f.b}`;
+  el('fval').innerHTML=f.val;
+  el('fmath').innerHTML=f.math;
+  el('fcite').innerHTML=f.cite;
+  el('bitfield').textContent=f.field.replace(/<[^>]+>/g,'');
+  el('specTop').innerHTML=f.cite.replace(/<\/?b>/g,'');
+}
+
+function dropDot(which){
+  // lon -> x, lat -> y within the box, framed around the fix
+  const x = 18 + ((LON - 8.540) / (8.552 - 8.540)) * 64; // percent
+  const y = 82 - ((LAT - 47.3945) / (47.4010 - 47.3945)) * 64;
+  dot.style.left=x+'%'; dot.style.top=y+'%';
+  dot.style.opacity='1'; dot.style.transform='scale(1)';
+  dotlbl.textContent = LAT.toFixed(5)+', '+LON.toFixed(4);
+  el('coord').textContent = `lat ${LAT.toFixed(7)}  lon ${LON.toFixed(7)}`;
+}
+
+function loop(ts){
+  const T = (ts/1000/18) % 1;          // 18s loop
+  // scan line across the buffer region during walk
+  const bufRect = buf.getBoundingClientRect();
+  const card = buf.parentElement.getBoundingClientRect();
+  let sx;
+  if(T<WALK0) sx=0;
+  else if(T>WALK1) sx=1;
+  else sx=(T-WALK0)/(WALK1-WALK0);
+  const left = (buf.offsetLeft) + sx*(buf.offsetWidth);
+  scan.style.left = left+'px';
+  scan.style.opacity = (T<WALK0||T>WALK1)?0.15:0.9;
+
+  // which field is active
+  let idx=-1, settle=1;
+  if(T>=WALK0 && T<=WALK1){
+    idx=Math.min(N-1, Math.floor((T-WALK0)/slot));
+    const local=((T-WALK0)-idx*slot)/slot;  // 0..1 within slot
+    settle = Math.min(1, Math.max(0, (local-0.12)/0.33)); // flip then lock
+  } else if(T>WALK1){ idx=N-1; settle=1; }
+
+  // reset on loop restart
+  if(T<WALK0){
+    if(activeIdx!==-1){
+      cells.forEach(c=>c.className='cell');
+      logRows.forEach(r=>r.className='row');
+      dot.style.opacity='0'; dot.style.transform='scale(.3)';
+      el('specTop').textContent='walking buffer…';
+      activeIdx=-1;
+    }
+  }
+
+  if(idx!==activeIdx && idx>=0){
+    activeIdx=idx;
+    const f=FIELDS[idx];
+    // mark cells
+    cells.forEach((c,ci)=>{
+      c.classList.remove('active','flip');
+      if(ci>=f.a && ci<=f.b) c.classList.add('active');
+      else { let done=false; for(let j=0;j<=idx;j++){ if(ci>=FIELDS[j].a && ci<=FIELDS[j].b) done=true; }
+             c.classList.toggle('done', done); }
+    });
+    setFocus(idx);
+    for(let j=0;j<=idx;j++) logRows[j].classList.add('on');
+    if(f.map) dropDot(f.map);
+  }
+
+  // live bit flipping on the active field
+  if(idx>=0){
+    const f=FIELDS[idx];
+    renderBits(f, settle);
+    // flip class on active cells while not yet settled
+    cells.forEach((c,ci)=>{
+      if(ci>=f.a && ci<=f.b){
+        if(settle<0.95){ c.classList.add('flip'); c.classList.remove('active');
+          c.firstChild.nodeValue = hx(Math.random()<settle?BYTES[ci]:Math.floor(Math.random()*256));
+        } else { c.classList.remove('flip'); c.classList.add('active'); c.firstChild.nodeValue=hx(BYTES[ci]); }
+      }
+    });
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

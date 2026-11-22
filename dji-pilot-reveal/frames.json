@@ -1,0 +1,211 @@
+{
+  "frames": [
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558221652,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 786,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.75
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558226658,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 787,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.77999877929688
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558226658,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 788,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.7300033569336
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558226658,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 789,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.79000091552734
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558236636,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 800,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.83000183105469
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 2496.921630859375,
+      "capture": "mini2",
+      "crc_check_passed": false,
+      "gps_time_ms": 1648558241642,
+      "height_m": 0.0,
+      "home": {
+        "lat": 0.0,
+        "lon": 0.00004583662361046586
+      },
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "False",
+      "sequence": 804,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.80999755859375
+    },
+    {
+      "aircraft": null,
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1648558241642,
+      "height_m": 0.0,
+      "home": null,
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 7.266531507168714
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "True",
+      "sequence": 805,
+      "serial": "SysSecWasHere ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.79000091552734
+    },
+    {
+      "aircraft": {
+        "lat": 96.13223396575783,
+        "lon": 0.0
+      },
+      "altitude_m": 0.0,
+      "capture": "mini2",
+      "crc_check_passed": false,
+      "gps_time_ms": 1648558225258,
+      "height_m": 0.0,
+      "home": {
+        "lat": 0.002933543911069815,
+        "lon": 0.0
+      },
+      "model": "Mini 2",
+      "pilot": {
+        "lat": 51.44719822772542,
+        "lon": 391.77786610673365
+      },
+      "product_type_code": 63,
+      "reference_crc_label": "False",
+      "sequence": 806,
+      "serial": "SysSecVasJeve ",
+      "uuid": null,
+      "version": 2,
+      "yaw_deg": 95.80000305175781
+    },
+    {
+      "aircraft": {
+        "lat": 51.44635597976657,
+        "lon": 7.267219056522872
+      },
+      "altitude_m": 42.97679901123047,
+      "capture": "mavic_air_2",
+      "crc_check_passed": true,
+      "gps_time_ms": 1650542026258,
+      "height_m": 12.801600456237793,
+      "home": {
+        "lat": 51.44628149525321,
+        "lon": 7.267356566393702
+      },
+      "model": "Mavic Air 2",
+      "pilot": {
+        "lat": 51.44622992905165,
+        "lon": 7.267104464963845
+      },
+      "product_type_code": 58,
+      "reference_crc_label": "True",
+      "sequence": 591,
+      "serial": "1WNBH3900201N1",
+      "uuid": "1143635532171534336",
+      "version": 2,
+      "yaw_deg": -132.9499969482422
+    }
+  ],
+  "payload_file": "remoteid/tests/data/dji_droneid_payloads.txt",
+  "provenance": "NDSS 2023 RUB-SysSec/DroneSecurity captures (samples/mini2_sm, samples/mavic_air_2)",
+  "source": "remoteid 0.3.3 remoteid::dji::FlightInfo::decode"
+}

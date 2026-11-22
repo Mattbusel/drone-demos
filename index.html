@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tensorust Drone Stack</title>
+<meta name="description" content="Live, self-contained demos of the Tensorust open-source drone crates: Remote ID decode and trust, counter-UAS spoofer detection, TAK bridging, KLV motion-imagery, and flight-log replay.">
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#111823; --panel2:#0d141d; --line:#1e2a3a;
+    --ink:#e6edf3; --muted:#8b9bb0; --dim:#5a6b80;
+    --drone:#4cc2ff; --pilot:#ff5c7a; --home:#ffd24c; --ok:#39d98a; --warn:#ff5c7a;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(76,194,255,.08), transparent 60%),
+      radial-gradient(900px 500px at 0% 10%, rgba(255,92,122,.05), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px}
+  header{padding:72px 0 40px}
+  .kick{font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--drone); margin:0 0 14px}
+  h1{font-size:clamp(30px,5vw,52px); line-height:1.05; margin:0 0 16px; letter-spacing:-.02em; font-weight:700}
+  h1 .accent{color:var(--drone)}
+  .lede{font-size:clamp(16px,2.3vw,19px); color:var(--muted); max-width:720px; margin:0}
+  .lede b{color:var(--ink); font-weight:600}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:26px}
+  .pill{font-family:var(--mono); font-size:11.5px; color:var(--muted); border:1px solid var(--line);
+    background:var(--panel2); border-radius:999px; padding:5px 11px}
+  .pill b{color:var(--ok); font-weight:600}
+
+  .section-h{display:flex; align-items:baseline; gap:12px; margin:46px 0 18px}
+  .section-h h2{font-size:15px; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink); margin:0; font-weight:600}
+  .section-h span{font-size:13px; color:var(--dim)}
+  .section-h .rule{flex:1; height:1px; background:var(--line)}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:18px}
+  .card{
+    display:flex; flex-direction:column; text-decoration:none; color:inherit;
+    background:linear-gradient(180deg, var(--panel), var(--panel2));
+    border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    transition:border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+    min-height:220px;
+  }
+  .card:hover{border-color:#355373; transform:translateY(-3px);
+    box-shadow:0 14px 40px -18px rgba(0,0,0,.8)}
+  .thumb{height:132px; position:relative; border-bottom:1px solid var(--line); overflow:hidden; background:var(--panel2)}
+  .thumb canvas{display:block; width:100%; height:100%}
+  .card .body{padding:16px 18px 18px; display:flex; flex-direction:column; flex:1}
+  .card h3{margin:0 0 7px; font-size:17px; letter-spacing:-.01em}
+  .card p{margin:0 0 14px; font-size:13.5px; color:var(--muted); flex:1}
+  .card .tags{display:flex; flex-wrap:wrap; gap:6px}
+  .tag{font-family:var(--mono); font-size:10.5px; color:var(--drone);
+    border:1px solid rgba(76,194,255,.25); background:rgba(76,194,255,.07); border-radius:6px; padding:3px 7px}
+  .tag.c{color:var(--home); border-color:rgba(255,210,76,.25); background:rgba(255,210,76,.06)}
+  .tag.r{color:var(--pilot); border-color:rgba(255,92,122,.25); background:rgba(255,92,122,.06)}
+
+  .bits{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px}
+  .bit{text-decoration:none; color:inherit; border:1px solid var(--line); border-radius:11px;
+    padding:15px 16px; background:var(--panel2); transition:border-color .16s, transform .16s}
+  .bit:hover{border-color:#355373; transform:translateY(-2px)}
+  .bit h4{margin:0 0 5px; font-size:14px}
+  .bit span{font-family:var(--mono); font-size:11px; color:var(--dim)}
+  .bit p{margin:8px 0 0; font-size:12px; color:var(--muted)}
+
+  footer{margin:66px 0 54px; padding-top:26px; border-top:1px solid var(--line); color:var(--dim); font-size:13px}
+  footer p{margin:0 0 12px; max-width:860px}
+  footer .crates{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+  footer a.crate{font-family:var(--mono); font-size:12px; color:var(--drone); text-decoration:none;
+    border:1px solid var(--line); border-radius:7px; padding:5px 10px; background:var(--panel2)}
+  footer a.crate:hover{border-color:#355373}
+  footer a.crate .v{color:var(--dim)}
+  .honest{color:var(--muted)}
+  @media (max-width:560px){ header{padding:48px 0 30px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="kick">Tensorust drone stack</p>
+    <h1>Live demos of the <span class="accent">drone radio</span> crates</h1>
+    <p class="lede">Open-source Rust that reads what drones broadcast: <b>Remote ID</b> decode and spoof detection, counter-UAS <b>trust verdicts</b>, <b>TAK</b> bridging, <b>KLV</b> motion-imagery metadata, and flight-log replay. Every demo below runs the real crate output in your browser. No backend, no network.</p>
+    <div class="meta">
+      <span class="pill"><b>Real</b> crate decode + detection</span>
+      <span class="pill">Scenarios simulated</span>
+      <span class="pill">100% offline</span>
+      <span class="pill">Receive-only</span>
+    </div>
+  </header>
+
+  <div class="section-h">
+    <h2>Flagship demos</h2><span>six scenes</span><div class="rule"></div>
+  </div>
+
+  <div class="grid">
+
+    <a class="card" href="sentinel-flood/index.html">
+      <div class="thumb"><canvas data-viz="radar"></canvas></div>
+      <div class="body">
+        <h3>Sentinel: one radio, 500 IDs</h3>
+        <p>A radar scope floods with 500 fake Remote ID identities. Hit the detector and they collapse to a single emitter, exposing the one genuine drone underneath.</p>
+        <div class="tags"><span class="tag">remoteid</span><span class="tag">remoteid-sentinel</span><span class="tag c">remoteid-scenario</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="dji-pilot-reveal/index.html">
+      <div class="thumb"><canvas data-viz="pilot"></canvas></div>
+      <div class="body">
+        <h3>DJI pilot reveal</h3>
+        <p>One OcuSync DroneID payload, fully decoded. Phase two drops the operator's own GNSS fix onto the map: the drone broadcasts where the pilot is standing.</p>
+        <div class="tags"><span class="tag">remoteid::dji</span><span class="tag c">NDSS 2023</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="remoteid-to-tak/index.html">
+      <div class="thumb"><canvas data-viz="tak"></canvas></div>
+      <div class="body">
+        <h3>Remote ID to TAK</h3>
+        <p>Raw Remote ID in, Cursor-on-Target XML out. A spoofed transmitter reaches the ATAK picture as a red suspect marker, not an ordinary aircraft.</p>
+        <div class="tags"><span class="tag">remoteid</span><span class="tag">uas-cot</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="spoofer-caught/index.html">
+      <div class="thumb"><canvas data-viz="spoof"></canvas></div>
+      <div class="body">
+        <h3>Spoofer caught</h3>
+        <p>A counter-UAS console plays a 40-second feed. Two honest drones stay green; eight public spoofing tools flip red as teleports and shared-radio proof arrive.</p>
+        <div class="tags"><span class="tag">remoteid</span><span class="tag r">trust engine</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="flight-replay/index.html">
+      <div class="thumb"><canvas data-viz="flight"></canvas></div>
+      <div class="body">
+        <h3>Flight log replay</h3>
+        <p>96,922 ArduPilot messages decoded to a ground track. Watch a battery sag from 12.6 V, trip the failsafe, and force RTL then LAND then disarm.</p>
+        <div class="tags"><span class="tag">flightlog-core</span><span class="tag c">0 bytes skipped</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="klv-fmv-overlay/index.html">
+      <div class="thumb"><canvas data-viz="klv"></canvas></div>
+      <div class="body">
+        <h3>KLV motion-imagery overlay</h3>
+        <p>An FMV exploitation station over real MISB ST 0601 telemetry. Synthetic imagery, real metadata, with a live conformance check flagging the bad fields.</p>
+        <div class="tags"><span class="tag">misb</span><span class="tag r">misb-check</span></div>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="section-h">
+    <h2>Byte-level decoders</h2><span>raw payload in, decoded fields out</span><div class="rule"></div>
+  </div>
+
+  <div class="bits">
+    <a class="bit" href="bits/f3411-basic-id/index.html"><h4>F3411 Basic ID</h4><span>remoteid</span><p>ASTM F3411 Basic ID message, byte by byte.</p></a>
+    <a class="bit" href="bits/f3411-location/index.html"><h4>F3411 Location</h4><span>remoteid</span><p>Position, altitude, speed and course decode.</p></a>
+    <a class="bit" href="bits/dji-droneid/index.html"><h4>DJI DroneID</h4><span>remoteid::dji</span><p>OcuSync FlightInfo frame with CRC check.</p></a>
+    <a class="bit" href="bits/mavlink2-crc/index.html"><h4>MAVLink 2</h4><span>mavlink-tlog</span><p>Frame parse and CRC-16 validation.</p></a>
+    <a class="bit" href="bits/misb-st0601/index.html"><h4>ST 0601 KLV</h4><span>misb</span><p>KLV universal-key / local-set unpack.</p></a>
+  </div>
+
+  <footer>
+    <p class="honest"><b style="color:var(--ink)">Honest by design.</b> The scenarios here are simulated: the floods, spoofers and flight paths are staged so you can see a clear story. But every decoded field, trust verdict and detection result is produced by the open-source crates themselves, run natively against real payloads (including DJI captures from the NDSS 2023 research dataset) and replayed in the browser. Nothing is faked and no capability is invented.</p>
+    <p class="honest">The stack is receive-only. <code style="font-family:var(--mono);color:var(--drone)">remoteid-sentinel</code> and every demo on this page listen and decode. There is no transmit path anywhere in this code.</p>
+    <div class="crates">
+      <a class="crate" href="https://crates.io/crates/remoteid" target="_blank" rel="noopener">remoteid <span class="v">0.3.3</span></a>
+      <a class="crate" href="https://crates.io/crates/remoteid-sentinel" target="_blank" rel="noopener">remoteid-sentinel <span class="v">0.1.0</span></a>
+      <a class="crate" href="https://crates.io/crates/remoteid-scenario" target="_blank" rel="noopener">remoteid-scenario <span class="v">0.1.0</span></a>
+      <a class="crate" href="https://crates.io/crates/uas-cot" target="_blank" rel="noopener">uas-cot <span class="v">0.6.0</span></a>
+      <a class="crate" href="https://crates.io/crates/misb" target="_blank" rel="noopener">misb <span class="v">0.4.1</span></a>
+      <a class="crate" href="https://crates.io/crates/flightlog-core" target="_blank" rel="noopener">flightlog-core <span class="v">0.2.0</span></a>
+      <a class="crate" href="https://crates.io/crates/mavlink-tlog" target="_blank" rel="noopener">mavlink-tlog <span class="v">0.1.4</span></a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Lightweight animated thumbnails. Pure canvas, no data dependency, decorative only.
+(function(){
+  const cs = document.querySelectorAll('canvas[data-viz]');
+  const ctxs = [];
+  function fit(c){
+    const r = c.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    c.width = Math.max(2, r.width*dpr); c.height = Math.max(2, r.height*dpr);
+    const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0);
+    return {c, x, w:r.width, h:r.height, kind:c.dataset.viz};
+  }
+  cs.forEach(c=>ctxs.push(fit(c)));
+  window.addEventListener('resize', ()=>{ ctxs.forEach((o,i)=>ctxs[i]=fit(o.c)); });
+
+  const COL={bg:'#0d141d', drone:'#4cc2ff', pilot:'#ff5c7a', home:'#ffd24c', ok:'#39d98a', line:'#1e2a3a', dim:'#5a6b80'};
+
+  function draw(o,t){
+    const {x,w,h,kind}=o; if(!w) return;
+    x.clearRect(0,0,w,h);
+    x.fillStyle=COL.bg; x.fillRect(0,0,w,h);
+    const cx=w/2, cy=h/2;
+    if(kind==='radar'||kind==='spoof'){
+      for(let i=1;i<=4;i++){ x.beginPath(); x.strokeStyle=COL.line; x.arc(cx,cy,(Math.min(w,h)/2)*i/4.2,0,7); x.stroke(); }
+      const sweep=(t*0.0012)%(Math.PI*2);
+      const g=x.createConicGradient?x.createConicGradient(sweep,cx,cy):null;
+      x.save(); x.beginPath(); x.moveTo(cx,cy);
+      x.arc(cx,cy,Math.min(w,h)/2, sweep-0.5, sweep); x.closePath();
+      x.fillStyle='rgba(76,194,255,.10)'; x.fill(); x.restore();
+      const n = kind==='radar'?60:14;
+      for(let i=0;i<n;i++){
+        const a=i*2.4+t*0.0002, rr=(Math.min(w,h)/2)*(0.2+0.7*((i*37%100)/100));
+        const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr;
+        const fake = i!==3;
+        const fl = fake? (0.3+0.7*Math.abs(Math.sin(t*0.003+i))) : 1;
+        x.beginPath(); x.fillStyle=fake?`rgba(255,210,76,${0.5*fl})`:COL.ok;
+        x.arc(px,py,fake?1.6:2.6,0,7); x.fill();
+      }
+    } else if(kind==='pilot'){
+      x.strokeStyle=COL.line; for(let gx=0;gx<w;gx+=22){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.globalAlpha=.4;x.stroke();}
+      for(let gy=0;gy<h;gy+=22){x.beginPath();x.moveTo(0,gy);x.lineTo(w,gy);x.stroke();} x.globalAlpha=1;
+      const dx=cx+18, dy=cy-10, pxp=cx-26, pyp=cy+22;
+      x.strokeStyle=COL.pilot; x.setLineDash([4,4]); x.beginPath(); x.moveTo(dx,dy); x.lineTo(pxp,pyp); x.stroke(); x.setLineDash([]);
+      x.fillStyle=COL.home; x.beginPath(); x.arc(dx-30,dy-6,3,0,7); x.fill();
+      const pulse=2+1.6*Math.abs(Math.sin(t*0.004));
+      x.fillStyle=COL.drone; x.beginPath(); x.arc(dx,dy,3+pulse*0.4,0,7); x.fill();
+      x.fillStyle='rgba(255,92,122,.25)'; x.beginPath(); x.arc(pxp,pyp,pulse+2,0,7); x.fill();
+      x.fillStyle=COL.pilot; x.beginPath(); x.arc(pxp,pyp,3,0,7); x.fill();
+    } else if(kind==='tak'){
+      for(let i=1;i<=3;i++){ x.beginPath(); x.strokeStyle=COL.line; x.arc(cx,cy,(Math.min(w,h)/2)*i/3.4,0,7); x.stroke(); }
+      const pts=[[0.5,0.3,COL.drone],[0.3,0.62,COL.pilot],[0.72,0.58,COL.drone],[0.6,0.78,COL.pilot]];
+      pts.forEach(([fx,fy,col],i)=>{
+        const px=w*fx, py=h*fy, a=t*0.001+i;
+        x.strokeStyle=col; x.lineWidth=1.4;
+        x.beginPath(); x.moveTo(px-5,py); x.lineTo(px+5,py); x.moveTo(px,py-5); x.lineTo(px,py+5); x.stroke();
+        x.beginPath(); x.moveTo(px,py); x.lineTo(px+Math.cos(a)*7,py+Math.sin(a)*7); x.stroke();
+      });
+    } else if(kind==='flight'){
+      // out-and-back track
+      x.strokeStyle=COL.line; x.beginPath(); x.arc(cx,cy,Math.min(w,h)*0.33,0,7); x.stroke();
+      const prog=(t*0.0004)%1; const seg = prog<0.5?prog*2:(1-prog)*2;
+      x.strokeStyle=COL.drone; x.lineWidth=1.6; x.beginPath();
+      for(let i=0;i<=40;i++){ const p=i/40*seg; const px=cx-50+p*100; const py=cy+Math.sin(p*3.14)*-6 + (p>0.8?(p-0.8)*40:0); i?x.lineTo(px,py):x.moveTo(px,py); }
+      x.stroke();
+      x.fillStyle=COL.home; x.fillRect(cx-52,cy-2,4,4);
+      const hp=cx-50+seg*100;
+      x.fillStyle= prog>0.7?COL.pilot:COL.drone; x.beginPath(); x.arc(hp,cy+(seg>0.8?(seg-0.8)*40:0)+Math.sin(seg*3.14)*-6,3.2,0,7); x.fill();
+    } else if(kind==='klv'){
+      // corner brackets + horizon
+      x.strokeStyle=COL.home; x.lineWidth=1.4; const m=14,L=12;
+      [[m,m,1,1],[w-m,m,-1,1],[m,h-m,1,-1],[w-m,h-m,-1,-1]].forEach(([bx,by,sx,sy])=>{
+        x.beginPath(); x.moveTo(bx,by+sy*L); x.lineTo(bx,by); x.lineTo(bx+sx*L,by); x.stroke();
+      });
+      const tilt=Math.sin(t*0.0009)*0.12;
+      x.strokeStyle='rgba(76,194,255,.4)'; x.beginPath();
+      x.moveTo(0,cy+Math.tan(tilt)*(0-cx)); x.lineTo(w,cy+Math.tan(tilt)*(w-cx)); x.stroke();
+      x.strokeStyle=COL.drone; x.beginPath(); x.moveTo(cx-6,cy);x.lineTo(cx+6,cy);x.moveTo(cx,cy-6);x.lineTo(cx,cy+6); x.stroke();
+      x.fillStyle=COL.ok; x.font='9px monospace'; x.fillText('ST 0601', m+4, h-m-6);
+    }
+  }
+  let raf;
+  function loop(t){ ctxs.forEach(o=>draw(o,t)); raf=requestAnimationFrame(loop); }
+  // pause when tab hidden
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden){cancelAnimationFrame(raf);} else {raf=requestAnimationFrame(loop);} });
+  raf=requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

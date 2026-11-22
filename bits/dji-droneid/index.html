@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DJI DroneID Decode</title>
+<meta name="description" content="Byte-level decode of a real 91-byte DJI DroneID OcuSync payload: every bit shown is from a frame remoteid actually parses.">
+<style>
+  :root{
+    --bg:#05070a; --panel:#0a0e14; --panel2:#0c1119; --line:#16202c;
+    --ink:#c9d6cf; --dim:#5d6b72; --faint:#39474f;
+    --green:#4ade80; --greendim:#1f6b42; --amber:#f5b942; --cyan:#48c7d8;
+    --pink:#ff4d8d; --wire:#243541;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono)}
+  body{
+    min-height:100vh; padding:20px 16px 34px; overflow-x:hidden;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #0c1622 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #0a1016 0%, transparent 55%),
+      var(--bg);
+  }
+  /* CRT scanline veil */
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply; opacity:.55;
+  }
+  .wrap{max-width:1120px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+  .tag{color:var(--green);font-weight:700;letter-spacing:.14em;font-size:11px;text-transform:uppercase}
+  h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.02em}
+  h1 .q{color:var(--amber)}
+  .sub{color:var(--dim);font-size:11.5px;margin-left:auto;text-align:right;line-height:1.5}
+  .sub b{color:var(--cyan);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:1fr 316px;gap:16px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:7px;padding:14px}
+  .card h2{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 11px;font-weight:600}
+
+  /* hex buffer */
+  .bufwrap{position:relative;overflow:hidden;border-radius:4px}
+  .hex{display:grid;grid-template-columns:repeat(16,1fr);gap:3px;position:relative}
+  .cell{
+    position:relative;text-align:center;font-size:12.5px;line-height:1.1;padding:5px 0;border-radius:3px;
+    color:var(--faint);background:#080c11;border:1px solid transparent;transition:color .18s,background .18s,border-color .18s,box-shadow .18s;
+  }
+  .cell .off{display:block;font-size:7.5px;color:#1f2a31;margin-bottom:2px;letter-spacing:.02em}
+  .cell.done{color:var(--ink)}
+  .cell.fld{color:#071014}
+  .cell.active{animation:flick .12s steps(2) infinite}
+  @keyframes flick{0%{opacity:.78}100%{opacity:1}}
+  /* field color classes */
+  .c-meta.fld{background:#2a3139;color:#aeb9c0}
+  .c-id.fld{background:var(--green);box-shadow:0 0 14px rgba(74,222,128,.45)}
+  .c-pos.fld{background:var(--cyan);box-shadow:0 0 14px rgba(72,199,216,.4)}
+  .c-pilot.fld{background:var(--pink);box-shadow:0 0 16px rgba(255,77,141,.55)}
+  .c-home.fld{background:var(--amber);box-shadow:0 0 14px rgba(245,185,66,.4)}
+  .c-time.fld{background:#8b7be8;box-shadow:0 0 14px rgba(139,123,232,.4)}
+  .c-aux.fld{background:#5c6a72;color:#0b0f13}
+  .c-crc.fld{background:var(--green);box-shadow:0 0 18px rgba(74,222,128,.6)}
+  .c-id.done{color:var(--green)} .c-pos.done{color:var(--cyan)} .c-pilot.done{color:var(--pink)}
+  .c-home.done{color:var(--amber)} .c-time.done{color:#a99cf0} .c-crc.done{color:var(--green)} .c-meta.done{color:#9aa5ac} .c-aux.done{color:#8b969d}
+  .scan{position:absolute;top:-4px;bottom:-4px;width:2px;background:linear-gradient(180deg,transparent,var(--green),transparent);box-shadow:0 0 10px 2px rgba(74,222,128,.7);pointer-events:none;z-index:5;transition:left .32s cubic-bezier(.4,0,.2,1)}
+
+  /* bit inspector */
+  .bitbar{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;min-height:92px}
+  .bitlabel{display:flex;gap:10px;align-items:baseline;font-size:11px;color:var(--dim);margin-bottom:9px;flex-wrap:wrap}
+  .bitlabel .fname{color:var(--ink);font-weight:700;letter-spacing:.03em}
+  .bitlabel .range{color:var(--faint)}
+  .bits{display:flex;flex-wrap:wrap;gap:3px}
+  .byteblk{display:flex;gap:2px;padding:3px;border-radius:4px;background:#070b0f;border:1px solid var(--line)}
+  .bit{width:15px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;border-radius:2px;background:#0c1218;color:#33424a;transition:background .1s,color .1s}
+  .bit.one{background:#10251a;color:var(--green)}
+  .bit.zero{background:#0c1218;color:#3f4e56}
+  .bit.flip{background:#1a2731;color:var(--amber)}
+  .arrow{color:var(--green);font-size:14px;margin:0 2px}
+  .resolve{margin-top:10px;font-size:13px;min-height:19px;color:var(--dim)}
+  .resolve b{color:var(--green)}
+  .resolve.wow b{color:var(--pink)}
+
+  /* right column */
+  .spec{font-size:11.5px;line-height:1.55}
+  .spec .cur{color:var(--amber);min-height:34px;display:block;margin-bottom:10px}
+  .spec .cite{color:var(--dim);border-left:2px solid var(--wire);padding-left:10px;margin:10px 0 0}
+  .spec .cite b{color:var(--cyan)}
+
+  .readout{margin-top:16px}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #0f1720;font-size:12px;opacity:.28;transition:opacity .4s}
+  .row.lit{opacity:1}
+  .row .k{color:var(--dim)}
+  .row .v{color:var(--ink);text-align:right;font-weight:600}
+  .row.pilot .v{color:var(--pink)} .row.pos .v{color:var(--cyan)} .row.id .v{color:var(--green)} .row.crc .v{color:var(--green)}
+  .foot{margin-top:14px;color:var(--faint);font-size:10.5px;line-height:1.6}
+  .foot code{color:var(--dim)}
+  .live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);margin-right:6px;animation:pulse 1.4s ease-in-out infinite;vertical-align:middle}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .crcflash{animation:none}
+  .crcflash.go{animation:crcpop 1s ease-out}
+  @keyframes crcpop{0%{box-shadow:0 0 0 rgba(74,222,128,0)}30%{box-shadow:0 0 40px 6px rgba(74,222,128,.55)}100%{box-shadow:0 0 0 rgba(74,222,128,0)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">// skunkworks · byte decode</span>
+    <h1>DJI DroneID <span class="q">·</span> OcuSync 91-byte payload</h1>
+    <div class="sub">
+      real frame from <b>remoteid::dji::FlightInfo::decode</b><br>
+      capture: NDSS 2023 <b>mavic_air_2</b> sample &nbsp;·&nbsp; CRC verified
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="card">
+      <h2><span class="live"></span>raw payload &nbsp;/&nbsp; 91 bytes &nbsp;/&nbsp; hex</h2>
+      <div class="bufwrap">
+        <div class="hex" id="hex"></div>
+        <div class="scan" id="scan" style="left:0"></div>
+      </div>
+
+      <div class="bitbar">
+        <div class="bitlabel">
+          <span class="fname" id="bl-name">&middot;</span>
+          <span class="range" id="bl-range"></span>
+        </div>
+        <div class="bits" id="bits"></div>
+        <div class="resolve" id="resolve">booting decoder&hellip;</div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div>
+      <div class="card">
+        <h2>spec // the walk</h2>
+        <div class="spec">
+          <span class="cur" id="cur-spec">standing by</span>
+          <div class="cite">
+            layout: <b>NDSS 2023</b> &middot; "Drone Security and the Mysterious Case of DJI's DroneID", Schiller et al.<br><br>
+            CRC-16, poly <b>0x1021</b> reflected, init <b>0x3692</b>, no final XOR, covers bytes <b>[0..88]</b>, carried LE in <b>[89..90]</b>.
+          </div>
+        </div>
+      </div>
+
+      <div class="card readout">
+        <h2>decoded // resolving</h2>
+        <div class="row id" id="r-serial"><span class="k">UAS serial</span><span class="v">&middot;</span></div>
+        <div class="row" id="r-model"><span class="k">model</span><span class="v">&middot;</span></div>
+        <div class="row pos" id="r-air"><span class="k">aircraft</span><span class="v">&middot;</span></div>
+        <div class="row pilot" id="r-pilot"><span class="k">pilot phone</span><span class="v">&middot;</span></div>
+        <div class="row home" id="r-home"><span class="k">home point</span><span class="v">&middot;</span></div>
+        <div class="row" id="r-time"><span class="k">GPS time</span><span class="v">&middot;</span></div>
+        <div class="row crc" id="r-crc"><span class="k">CRC-16</span><span class="v">&middot;</span></div>
+        <div class="foot">
+          every byte above is from one real OcuSync frame, decoded by
+          <code>remoteid v0.3.3</code>. positions = <code>i32 radians &times; 1e7 &rarr; deg</code>.
+          no invented bytes.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAYLOAD_HEX =
+"5810024f02f71f31574e4248333930303230314e310000915a13008b0289008d002a00feff02001a0011cc129ef84b80010000750289007d5a1300a95a13007e0289003a13313134333633353533323137313533343333360048b0";
+const BYTES = [];
+for(let i=0;i<PAYLOAD_HEX.length;i+=2) BYTES.push(parseInt(PAYLOAD_HEX.substr(i,2),16));
+
+// Field map: offsets + RESOLVED values are exactly what the crate printed.
+const F = [
+ {n:'length',       o:0,  l:1, cls:'meta', spec:'frame length byte', res:'0x58 = 88 payload bytes follow'},
+ {n:'record_type',  o:1,  l:1, cls:'meta', spec:'subcommand 0x10 = flight telemetry', res:'0x10 = FLIGHT_INFO'},
+ {n:'version',      o:2,  l:1, cls:'meta', spec:'record version', res:'v2 (87-byte record layout)'},
+ {n:'sequence',     o:3,  l:2, cls:'aux',  spec:'u16 LE, +1 each frame', res:'seq = 591'},
+ {n:'state_info',   o:5,  l:2, cls:'aux',  spec:'flag word (bit meanings unconfirmed)', res:'0x1ff7 (kept raw)'},
+ {n:'serial',       o:7,  l:16,cls:'id',   spec:'16B NUL-pad ASCII → UAS serial', res:'serial = "1WNBH3900201N1"', wow:0},
+ {n:'longitude',    o:23, l:4, cls:'pos',  spec:'i32 LE, rad ×1e7 → deg  (aircraft lon)', res:'7.2672191° E'},
+ {n:'latitude',     o:27, l:4, cls:'pos',  spec:'i32 LE, rad ×1e7 → deg  (aircraft lat)', res:'51.4463560° N'},
+ {n:'altitude',     o:31, l:2, cls:'aux',  spec:'i16 (unit unpublished)', res:'141 (raw)'},
+ {n:'height',       o:33, l:2, cls:'aux',  spec:'i16 (unit unpublished)', res:'42 (raw)'},
+ {n:'v_north',      o:35, l:2, cls:'aux',  spec:'i16 velocity north', res:'-2'},
+ {n:'v_east',       o:37, l:2, cls:'aux',  spec:'i16 velocity east', res:'2'},
+ {n:'v_up',         o:39, l:2, cls:'aux',  spec:'i16 velocity up', res:'26'},
+ {n:'yaw',          o:41, l:2, cls:'aux',  spec:'i16 /100 → deg heading', res:'-132.95°'},
+ {n:'gps_time',     o:43, l:8, cls:'time', spec:'u64 LE ms since Unix epoch', res:'2022-04-21 11:53:46 UTC'},
+ {n:'pilot_lat',    o:51, l:4, cls:'pilot',spec:'i32 rad ×1e7 → deg  // PILOT phone lat', res:'51.4462299° N', wow:1},
+ {n:'pilot_lon',    o:55, l:4, cls:'pilot',spec:'i32 rad ×1e7 → deg  // PILOT phone lon', res:'7.2671046° E', wow:1},
+ {n:'home_lon',     o:59, l:4, cls:'home', spec:'i32 rad ×1e7 → deg  (home-point lon)', res:'7.2673566° E'},
+ {n:'home_lat',     o:63, l:4, cls:'home', spec:'i32 rad ×1e7 → deg  (home-point lat)', res:'51.4462815° N'},
+ {n:'product_type', o:67, l:1, cls:'id',   spec:'product code → model table', res:'code 58 → "Mavic Air 2"'},
+ {n:'uuid_len',     o:68, l:1, cls:'aux',  spec:'u8 UUID length', res:'19'},
+ {n:'uuid',         o:69, l:20,cls:'aux',  spec:'20B NUL-pad flight UUID', res:'"1143635532171534336"'},
+ {n:'crc',          o:89, l:2, cls:'crc',  spec:'CRC-16 refl 0x1021 / init 0x3692 over [0..88]', res:'0xb048  ::  CRC OK ✓', crc:1},
+];
+
+// build hex grid
+const hexEl=document.getElementById('hex');
+const cells=[];
+for(let i=0;i<BYTES.length;i++){
+  const d=document.createElement('div');
+  d.className='cell';
+  const off = (i%16===0)?('<span class="off">'+i.toString().padStart(2,'0')+'</span>'):'<span class="off">&nbsp;</span>';
+  d.innerHTML=off+BYTES[i].toString(16).padStart(2,'0');
+  hexEl.appendChild(d); cells.push(d);
+}
+// map byte offset -> field
+const owner=new Array(BYTES.length).fill(-1);
+F.forEach((f,fi)=>{for(let k=f.o;k<f.o+f.l;k++) owner[k]=fi;});
+
+const scan=document.getElementById('scan');
+const bitsEl=document.getElementById('bits');
+const blName=document.getElementById('bl-name');
+const blRange=document.getElementById('bl-range');
+const resolveEl=document.getElementById('resolve');
+const curSpec=document.getElementById('cur-spec');
+const R={serial:q('r-serial'),model:q('r-model'),air:q('r-air'),pilot:q('r-pilot'),home:q('r-home'),time:q('r-time'),crc:q('r-crc')};
+function q(id){return document.getElementById(id);}
+
+function buildBits(f){
+  bitsEl.innerHTML='';
+  const blk=[];
+  for(let k=f.o;k<f.o+f.l;k++){
+    const bb=document.createElement('div'); bb.className='byteblk';
+    const bits=[];
+    for(let b=7;b>=0;b--){
+      const el=document.createElement('div'); el.className='bit'; el.textContent='0';
+      bb.appendChild(el); bits.push({el,val:(BYTES[k]>>b)&1});
+    }
+    bitsEl.appendChild(bb); blk.push(bits);
+    if(f.l>8 && (k-f.o)===7){ // wrap long fields to keep readable
+      const brk=document.createElement('div'); brk.style.flexBasis='100%'; brk.style.height='0'; bitsEl.appendChild(brk);
+    }
+  }
+  return blk.flat();
+}
+
+// timeline
+const FLIP=520, SETTLE=760, HOLD=560; // ms per phase
+const PER = FLIP+SETTLE+HOLD;
+const START=900, ENDHOLD=2600;
+const TOTAL = START + F.length*PER + ENDHOLD;
+
+let curField=-1, flipBits=null, lastFlip=0;
+
+function setScan(centerByte){
+  const c=cells[centerByte]; if(!c)return;
+  const r=hexEl.getBoundingClientRect(), cr=c.getBoundingClientRect();
+  scan.style.left=(cr.left-r.left+cr.width/2)+'px';
+  scan.style.top=(cr.top-r.top)+'px';
+  scan.style.height=cr.height+'px';
+  scan.style.bottom='auto';
+}
+
+function litRow(row,val,on){ row.querySelector('.v').textContent=val; if(on)row.classList.add('lit'); }
+
+function enterField(fi){
+  curField=fi; const f=F[fi];
+  // reset cells not yet done keep; mark this field active
+  for(let k=f.o;k<f.o+f.l;k++){ cells[k].className='cell c-'+f.cls+' fld active'; }
+  blName.textContent=f.n;
+  blRange.textContent='bytes ['+f.o+'..'+(f.o+f.l)+']';
+  curSpec.innerHTML='&rsaquo; '+f.spec;
+  resolveEl.className='resolve'+(f.wow?' wow':'');
+  resolveEl.innerHTML='&hellip;';
+  flipBits=buildBits(f);
+  setScan(f.o + Math.floor(f.l/2));
+}
+
+function finishField(fi){
+  const f=F[fi];
+  for(let k=f.o;k<f.o+f.l;k++){ cells[k].className='cell c-'+f.cls+' done'; }
+  // settle bits
+  if(flipBits) flipBits.forEach(b=>{b.el.textContent=b.val; b.el.className='bit '+(b.val?'one':'zero');});
+  resolveEl.innerHTML=(f.wow?'▶ PILOT REVEAL // ':'')+'<b>'+f.res+'</b>';
+  // populate readout
+  if(f.n==='serial') litRow(R.serial,'1WNBH3900201N1',1);
+  if(f.n==='latitude'){ litRow(R.air,'51.4463560°N  7.2672191°E',1); }
+  if(f.n==='product_type') litRow(R.model,'DJI Mavic Air 2  (code 58)',1);
+  if(f.n==='pilot_lon'){ litRow(R.pilot,'51.4462299°N  7.2671046°E',1); }
+  if(f.n==='home_lat'){ litRow(R.home,'51.4462815°N  7.2673566°E',1); }
+  if(f.n==='gps_time') litRow(R.time,'2022-04-21 11:53:46 UTC',1);
+  if(f.n==='crc'){ litRow(R.crc,'0xb048  OK ✓',1);
+    document.querySelectorAll('.card').forEach(c=>{c.classList.add('crcflash');c.classList.add('go');}); }
+}
+
+function resetAll(){
+  cells.forEach((c,i)=>{c.className='cell';});
+  Object.values(R).forEach(r=>{r.classList.remove('lit');r.querySelector('.v').textContent="·";});
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('go'));
+  resolveEl.innerHTML='scanning buffer&hellip;'; curSpec.textContent='standing by';
+  blName.textContent="·"; blRange.textContent=''; bitsEl.innerHTML='';
+  curField=-1;
+}
+
+let doneFlag={}, started=false;
+function frame(ts){
+  if(!started){ started=true; window._t0=ts; }
+  let t=(ts-window._t0)%TOTAL;
+  if(t<START){ if(curField!==-1)resetAll(); requestAnimationFrame(frame); return; }
+  let rel=t-START;
+  let fi=Math.floor(rel/PER);
+  if(fi>=F.length){ // end hold, keep last state until loop
+    requestAnimationFrame(frame); return;
+  }
+  let phaseT=rel-fi*PER;
+  if(fi!==curField){ if(fi===0)resetAll(); enterField(fi); }
+  // animate bits
+  if(phaseT<FLIP && flipBits){
+    if(ts-lastFlip>45){ lastFlip=ts;
+      flipBits.forEach(b=>{const r=Math.random()<.5?0:1; b.el.textContent=r; b.el.className='bit flip';});
+    }
+  } else if(phaseT>=FLIP && phaseT<FLIP+120 && flipBits){
+    // settle moment
+    if(!doneFlag['s'+fi]){ doneFlag={}; doneFlag['s'+fi]=1; finishField(fi); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

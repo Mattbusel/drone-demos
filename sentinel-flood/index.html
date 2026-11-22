@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentinel Flood Scope</title>
+<meta name="description" content="A receive-only counter-UAS detector finds the one real drone in a flood of 500 fakes. Driven by real remoteid-sentinel output." />
+<style>
+  :root{
+    --bg:#070b10; --bg2:#0b1119; --panel:#0e1621; --panel2:#111c29;
+    --line:#1d2c3c; --line2:#26384c;
+    --ink:#e8f0f7; --dim:#8da3b8; --faint:#5e748c;
+    --amber:#f2a33c; --red:#ff5c6c; --green:#36e2a0; --cyan:#53c7ff;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body{min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
+  header{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+  .kicker{font:600 11px/1.2 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan)}
+  h1{margin:0;font-size:clamp(22px,3.4vw,32px);font-weight:700;letter-spacing:-.01em}
+  h1 .q{color:var(--green)}
+  .sub{color:var(--dim);font-size:14px;max-width:70ch;line-height:1.5}
+  .sub code{font:600 12px var(--mono);color:var(--ink);background:#0f1b27;padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+
+  .stage{display:grid;grid-template-columns:1.25fr .9fr;gap:18px;align-items:start}
+  @media(max-width:860px){.stage{grid-template-columns:1fr}}
+
+  .scopecard{position:relative;background:
+      radial-gradient(120% 120% at 50% 40%, #0c1722 0%, #080d13 70%, #060a0f 100%);
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03)}
+  canvas{display:block;width:100%;height:auto;touch-action:none}
+  .scope-cap{position:absolute;left:14px;right:14px;bottom:12px;
+    font:500 12px/1.4 var(--mono);color:var(--dim);
+    background:linear-gradient(180deg,rgba(6,10,15,0),rgba(6,10,15,.82) 40%);
+    padding-top:26px;pointer-events:none;transition:color .4s}
+  .scope-cap b{color:var(--ink);font-weight:600}
+  .scope-badge{position:absolute;top:12px;left:14px;display:flex;gap:8px;align-items:center;
+    font:600 11px var(--mono);letter-spacing:.08em}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  .live{color:var(--green)}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--bg2));
+    border:1px solid var(--line);border-radius:16px;padding:18px}
+  .verdict{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+  .vring{--p:0;position:relative;width:74px;height:74px;flex:0 0 74px;border-radius:50%;
+    background:conic-gradient(var(--red) calc(var(--p)*1%), #15212e 0);
+    transition:--p .9s ease, background .6s;display:grid;place-items:center}
+  .vring::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--panel)}
+  .vring span{position:relative;font:700 18px var(--mono);z-index:1}
+  .vmeta .lvl{font-size:13px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+  .vmeta .big{font-size:22px;font-weight:700;letter-spacing:.01em}
+  .vmeta.flooded .big{color:var(--red)}
+
+  .btnrow{display:flex;gap:10px;margin:16px 0 6px}
+  button{font:600 14px/1 inherit;border-radius:10px;padding:13px 16px;cursor:pointer;border:1px solid transparent;transition:.15s}
+  .run{flex:1;background:linear-gradient(180deg,#1f7f5f,#15614a);color:#eafff6;border-color:#2aa178;
+    box-shadow:0 8px 20px rgba(28,140,104,.35)}
+  .run:hover{filter:brightness(1.08)}
+  .run:disabled{opacity:.45;cursor:default;filter:saturate(.4);box-shadow:none}
+  .reset{background:#101c28;color:var(--dim);border-color:var(--line2)}
+  .reset:hover{color:var(--ink)}
+
+  .section{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+  .section.hidden{display:none}
+  .sh{font:600 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+
+  .track{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--panel2)}
+  .track.fake{border-color:#4a2330;background:linear-gradient(180deg,#1a1016,#120b0f)}
+  .track.real{border-color:#1d5a44;background:linear-gradient(180deg,#0c1a16,#0a1412);box-shadow:0 0 0 1px rgba(54,226,160,.12)}
+  .track h3{margin:0 0 2px;font:600 14px var(--mono);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .track .vd{font:600 11px var(--mono);padding:2px 8px;border-radius:999px;letter-spacing:.05em}
+  .vd.spoofed{background:#3a1320;color:var(--red)}
+  .vd.suspicious{background:#2f2410;color:var(--amber)}
+  .vd.plausible,.vd.authenticated{background:#0f2a22;color:var(--green)}
+  .track .addr{font:500 11px var(--mono);color:var(--dim)}
+  .score{display:flex;align-items:center;gap:8px;margin:9px 0 4px}
+  .bar{flex:1;height:7px;border-radius:4px;background:#0a0f16;overflow:hidden;border:1px solid var(--line)}
+  .bar i{display:block;height:100%;border-radius:4px;transition:width .9s ease}
+  .score b{font:600 12px var(--mono);min-width:64px;text-align:right}
+  ul.reasons{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+  ul.reasons li{font-size:12.5px;color:var(--dim);display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+  ul.reasons li::before{content:"";margin-top:5px;width:6px;height:6px;border-radius:2px;flex:0 0 6px}
+  .track.fake ul.reasons li::before{background:var(--red)}
+  .track.real ul.reasons li::before{background:var(--green)}
+  ul.reasons li b{color:var(--ink);font-weight:600}
+  .tag{display:inline-block;font:600 10.5px var(--mono);padding:2px 7px;border-radius:6px;margin:2px 4px 2px 0;
+    border:1px solid var(--line2);color:var(--dim)}
+  .tag.hot{border-color:#4a2330;color:var(--red);background:#1a0e13}
+  .foot{margin-top:22px;color:var(--faint);font:500 12px/1.6 var(--mono);border-top:1px solid var(--line);padding-top:14px}
+  .foot b{color:var(--dim)}
+  .stat-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+  .stat{display:flex;flex-direction:column}
+  .stat .n{font:700 20px var(--mono);line-height:1.1}
+  .stat .l{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .n.red{color:var(--red)} .n.green{color:var(--green)} .n.cyan{color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">remoteid-sentinel &middot; receive-only counter-UAS analysis</div>
+    <h1>500 drones on the scope. <span class="q">Which one is real?</span></h1>
+    <p class="sub">
+      One radio floods the airspace with 500 templated Remote ID identities to bury a single
+      genuine aircraft. Hit <b>Run detector</b> and watch <code>remoteid-sentinel</code> collapse
+      the fakes and point security at the one real track. Every verdict, score and reason below is
+      this detector's real output over frames built by <code>remoteid-scenario</code>.
+    </p>
+  </header>
+
+  <div class="stage">
+    <div class="scopecard">
+      <div class="scope-badge"><span class="dot"></span><span class="live" id="badge">SENSOR LIVE &middot; 500 TRACKS</span></div>
+      <canvas id="scope" width="720" height="720"></canvas>
+      <div class="scope-cap" id="cap">
+        <b>Before detection.</b> A naive receiver trusts every broadcast and plots 500 aircraft.
+        The genuine drone is one of these blips.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="verdict">
+        <div class="vring" id="vring"><span id="vpct">--</span></div>
+        <div class="vmeta" id="vmeta">
+          <div class="lvl">Flood verdict</div>
+          <div class="big" id="vlevel">Not yet run</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="sIds">500</div><div class="l">Broadcast IDs</div></div>
+        <div class="stat"><div class="n cyan" id="sSrc">1</div><div class="l">On-air radios</div></div>
+        <div class="stat"><div class="n green" id="sReal">?</div><div class="l">Real drones</div></div>
+      </div>
+
+      <div class="btnrow">
+        <button class="run" id="run">Run detector</button>
+        <button class="reset" id="reset">Reset</button>
+      </div>
+
+      <div class="section hidden" id="resultSec">
+        <div class="sh">Tracks, ranked by the detector</div>
+        <div id="tracks"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot" id="foot">loading real detector output&hellip;</div>
+</div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  "use strict";
+  // ---- load the real crate output (data.js inlines data.json for offline use;
+  //      fall back to fetch when served over http) ----
+  function boot(D){ try{ run(D); }catch(e){ console.error(e);
+    document.getElementById('foot').textContent='error: '+e.message; } }
+  if (window.SENTINEL_DATA) boot(window.SENTINEL_DATA);
+  else fetch('data.json').then(r=>r.json()).then(boot).catch(e=>{
+    document.getElementById('foot').textContent='Could not load data.json ('+e.message+'). Open via data.js or a local server.';
+  });
+
+  function run(D){
+  // ----- geometry -> local meters (equirectangular) -----
+  var G = D.geometry;
+  var c = G.operator_pos;                       // scope center = sensor/operator
+  var mPerLat = 111320, mPerLon = 111320*Math.cos(c[0]*Math.PI/180);
+  function toM(lat,lon){ return [ (lon-c[1])*mPerLon, (lat-c[0])*mPerLat ]; } // [east, north]
+  var genM = G.genuine_track.map(function(p){return toM(p[0],p[1]);});
+  var fakeC = toM(G.fake_claimed_pos[0], G.fake_claimed_pos[1]);
+  var RANGE = 250; // metres, scope radius
+
+  // ----- stable scatter for the 500 fake blips (cosmetic spread around the
+  //       single claimed point; they collapse back to it on detection) -----
+  var N = G.fake_id_count;
+  function rng(s){ return function(){ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+  var rand = rng(1337);
+  var fakes = [];
+  for(var i=0;i<N;i++){
+    var ang = rand()*Math.PI*2, rad = Math.sqrt(rand())*92; // disc, up to 92 m
+    fakes.push({ ex:fakeC[0]+Math.cos(ang)*rad, ny:fakeC[1]+Math.sin(ang)*rad,
+                 ph: rand()*Math.PI*2, blink: .6+rand()*.4 });
+  }
+
+  // ----- canvas -----
+  var cv = document.getElementById('scope'), g = cv.getContext('2d');
+  var SIZE=720, CX=SIZE/2, CY=SIZE/2, Rpx=SIZE*0.46;
+  function fit(){
+    var dpr = Math.min(window.devicePixelRatio||1, 2);
+    var w = cv.clientWidth || SIZE;
+    cv.width = Math.round(w*dpr); cv.height = Math.round(w*dpr);
+    g.setTransform(dpr* w/SIZE,0,0,dpr* w/SIZE,0,0);
+  }
+  window.addEventListener('resize', fit); fit();
+  function sx(ex){ return CX + (ex/RANGE)*Rpx; }
+  function sy(ny){ return CY - (ny/RANGE)*Rpx; }
+
+  var state = 'idle';     // idle -> running -> done
+  var t0 = performance.now(), sweep=0, prog=0; // prog 0..1 detection reveal
+
+  function drawScope(now){
+    g.clearRect(0,0,SIZE,SIZE);
+    g.fillStyle='#070d12'; g.fillRect(0,0,SIZE,SIZE);
+    // range rings
+    g.lineWidth=1;
+    for(var r=50;r<=RANGE;r+=50){
+      g.beginPath(); g.arc(CX,CY,(r/RANGE)*Rpx,0,Math.PI*2);
+      g.strokeStyle = r===RANGE ? '#1a3a30' : 'rgba(26,74,60,.45)'; g.stroke();
+      g.fillStyle='rgba(84,199,255,.35)'; g.font='10px ui-monospace,monospace';
+      g.fillText(r+' m', CX+4, CY-(r/RANGE)*Rpx+12);
+    }
+    // cross hairs
+    g.strokeStyle='rgba(26,74,60,.4)'; g.beginPath();
+    g.moveTo(CX-Rpx,CY); g.lineTo(CX+Rpx,CY); g.moveTo(CX,CY-Rpx); g.lineTo(CX,CY+Rpx); g.stroke();
+
+    // radar sweep (idle + running)
+    if(state!=='done'){
+      sweep += 0.016;
+      var grad = g.createConicGradient ? null : null;
+      g.save(); g.translate(CX,CY); g.rotate(sweep);
+      var lg = g.createLinearGradient(0,0,Rpx,0);
+      lg.addColorStop(0,'rgba(54,226,160,.0)'); lg.addColorStop(1,'rgba(54,226,160,.22)');
+      g.fillStyle=lg; g.beginPath(); g.moveTo(0,0); g.arc(0,0,Rpx,-0.34,0); g.closePath(); g.fill();
+      g.restore();
+    }
+
+    // sensor marker
+    g.fillStyle='#53c7ff'; g.beginPath(); g.arc(CX,CY,4,0,Math.PI*2); g.fill();
+    g.strokeStyle='rgba(83,199,255,.5)'; g.beginPath(); g.arc(CX,CY,9,0,Math.PI*2); g.stroke();
+
+    var pulse = (Math.sin(now/280)+1)/2;
+
+    // ---- fake blips ----
+    // during detection they slide from their scattered point back to the single
+    // claimed point and desaturate; tethers reveal the one shared radio.
+    var collapse = easeInOut(prog);
+    if(prog>0.15){
+      // tether bundle to the single claimed source
+      g.strokeStyle='rgba(255,92,108,'+(0.10*collapse)+')'; g.lineWidth=1;
+    }
+    for(var i=0;i<fakes.length;i++){
+      var f=fakes[i];
+      var ex = f.ex + (fakeC[0]-f.ex)*collapse;
+      var ny = f.ny + (fakeC[1]-f.ny)*collapse;
+      var X=sx(ex), Y=sy(ny);
+      if(prog>0.2 && (i%7===0)){
+        g.beginPath(); g.moveTo(X,Y); g.lineTo(sx(fakeC[0]),sy(fakeC[1]));
+        g.strokeStyle='rgba(255,92,108,'+(0.05*collapse)+')'; g.stroke();
+      }
+      var alive = 0.5 + 0.5*Math.sin(now/400*f.blink + f.ph);
+      if(state==='idle' || state==='running'){
+        g.fillStyle='rgba(242,163,60,'+(0.35+0.4*alive)+')';
+      } else {
+        g.fillStyle='rgba(120,110,120,'+(0.12+0.10*alive)+')'; // dead grey
+      }
+      g.beginPath(); g.arc(X,Y, state==='done'?1.4:2.0, 0,Math.PI*2); g.fill();
+    }
+
+    // collapsed-source marker + label
+    if(prog>0.4){
+      var SXc=sx(fakeC[0]), SYc=sy(fakeC[1]);
+      g.fillStyle='rgba(255,92,108,'+(0.9*collapse)+')';
+      g.beginPath(); g.arc(SXc,SYc,5,0,Math.PI*2); g.fill();
+      g.strokeStyle='rgba(255,92,108,'+(0.6*collapse)+')'; g.lineWidth=1.5;
+      g.beginPath(); g.arc(SXc,SYc,10+3*pulse,0,Math.PI*2); g.stroke();
+      g.fillStyle='rgba(255,140,150,'+collapse+')'; g.font='600 11px ui-monospace,monospace';
+      g.fillText('1 radio · '+(D.tracks[0].transmitter), SXc+14, SYc-8);
+      g.fillStyle='rgba(255,92,108,'+(0.8*collapse)+')'; g.font='10px ui-monospace,monospace';
+      g.fillText('500 identities, one emitter', SXc+14, SYc+6);
+    }
+
+    // ---- genuine track ----
+    // path draws in as detection proceeds; pulses green when named real.
+    var showN = state==='idle' ? 1 : Math.max(2, Math.floor(genM.length*Math.min(1,prog*1.4)));
+    if(state!=='idle' && genM.length>1){
+      g.lineWidth=2; g.strokeStyle='rgba(54,226,160,'+(0.35+0.4*prog)+')';
+      g.beginPath();
+      for(var k=0;k<showN;k++){ var P=genM[k]; var Xx=sx(P[0]),Yy=sy(P[1]);
+        if(k===0)g.moveTo(Xx,Yy); else g.lineTo(Xx,Yy); }
+      g.stroke();
+    }
+    var head = genM[Math.min(showN-1, genM.length-1)];
+    var hx=sx(head[0]), hy=sy(head[1]);
+    if(state==='done'){
+      g.strokeStyle='rgba(54,226,160,'+(0.25+0.5*pulse)+')'; g.lineWidth=2;
+      g.beginPath(); g.arc(hx,hy,12+8*pulse,0,Math.PI*2); g.stroke();
+      g.beginPath(); g.arc(hx,hy,20+14*pulse,0,Math.PI*2);
+      g.strokeStyle='rgba(54,226,160,'+(0.12*(1-pulse))+')'; g.stroke();
+    }
+    g.fillStyle = state==='idle' ? 'rgba(242,163,60,.9)' : '#36e2a0';
+    g.beginPath(); g.arc(hx,hy, state==='done'?4.5:3.2,0,Math.PI*2); g.fill();
+    if(state==='done'){
+      g.fillStyle='#8affd3'; g.font='600 12px ui-monospace,monospace';
+      g.fillText('REAL — '+D.geometry.genuine_serial, hx+16, hy+4);
+      g.fillStyle='rgba(54,226,160,.7)'; g.font='10px ui-monospace,monospace';
+      g.fillText('real-score '+(realTrack().real_score).toFixed(2), hx+16, hy+18);
+    }
+  }
+  function easeInOut(x){ return x<.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+
+  function frame(now){
+    if(state==='running'){ prog=Math.min(1,(now-animStart)/2600); if(prog>=1){ state='done'; onDone(); } }
+    drawScope(now);
+    requestAnimationFrame(frame);
+  }
+  var animStart=0;
+  requestAnimationFrame(frame);
+
+  // ----- helpers over real data -----
+  function realTrack(){ return D.most_likely_real || D.tracks.find(function(t){return t.real_score>0.5;}); }
+  function fakeTrack(){ return D.tracks.find(function(t){return t.per_unit.verdict==='spoofed';}) || D.tracks[0]; }
+
+  var SIGTEXT = {
+    one_source_many_ids:['One source, many IDs', function(t){ var f=D.geometry.fanout_distinct_ids_per_source[t.transmitter]; return 'a single radio broadcast <b>'+f+' distinct UAS IDs</b> (fan-out).'; }],
+    templated_serial:['Templated serials', function(){ return 'serials share one template <b>'+D.scenario.serial_template.split(' ')[0]+'</b> — '+D.geometry.fake_serials_sample.slice(0,3).join(', ')+'…'; }],
+    frozen_or_identical_counter:['Frozen counters', function(){ return 'many “different” drones share one frozen message counter.'; }],
+    per_unit_spoofed_or_suspicious:['Graded spoofed', function(t){ return 'the library already graded this unit <b>'+t.per_unit.verdict+'</b>.'; }],
+    impossible_kinematics:['Impossible kinematics', function(){ return 'teleport or impossible speed in the reported track.'; }],
+    shared_operator_position:['Shared pilot position', function(){ return 'one pilot position under many “different” drones.'; }],
+    tight_rssi_position_cluster:['Tight RSSI cluster', function(){ return 'dozens of tracks at one signal strength and one spot.'; }],
+    known_spoofer_fingerprint:['Known spoofer', function(){ return 'carries the fingerprint of a known spoofing tool.'; }],
+    count_spike:['Count spike', function(){ return 'a sudden spawn of many new transmitters at once.'; }]
+  };
+  var REASONTEXT = {
+    counter_conflict:'one counter value carried different content: two radios under one address',
+    system_clock_drift:'system timestamp is zero or far from the receiver clock (shared across this field)',
+    teleport:'position jumped further than any drone could fly',
+    identity_clone:'the same UAS ID broadcast from another transmitter at an incompatible position',
+    reported_speed_mismatch:'reported speed disagrees with the track flown'
+  };
+
+  // ----- UI wiring -----
+  var runBtn=document.getElementById('run'), resetBtn=document.getElementById('reset');
+  var cap=document.getElementById('cap'), badge=document.getElementById('badge');
+  document.getElementById('foot').innerHTML =
+    '<b>Source:</b> '+D.generated_by+'<br><b>Scenario:</b> '+D.scenario.fake_count+
+    ' fakes + 1 genuine track, '+D.scenario.total_frames_decoded.toLocaleString()+
+    ' Remote ID frames decoded. '+D.note;
+
+  runBtn.addEventListener('click', function(){
+    if(state!=='idle') return;
+    state='running'; animStart=performance.now(); runBtn.disabled=true;
+    badge.textContent='DETECTOR RUNNING…'; badge.classList.remove('live');
+    cap.innerHTML='<b>Running '+'remoteid-sentinel'+'.</b> Cross-track signatures resolving across the whole field…';
+  });
+  resetBtn.addEventListener('click', function(){
+    state='idle'; prog=0; runBtn.disabled=false;
+    badge.textContent='SENSOR LIVE · 500 TRACKS'; badge.classList.add('live');
+    cap.innerHTML='<b>Before detection.</b> A naive receiver trusts every broadcast and plots 500 aircraft. The genuine drone is one of these blips.';
+    document.getElementById('resultSec').classList.add('hidden');
+    document.getElementById('vlevel').textContent='Not yet run';
+    document.getElementById('vmeta').classList.remove('flooded');
+    document.getElementById('vpct').textContent='--';
+    document.getElementById('vring').style.setProperty('--p',0);
+    document.getElementById('sReal').textContent='?';
+  });
+
+  function onDone(){
+    badge.textContent='VERDICT LOCKED';
+    cap.innerHTML='<b>After detection.</b> 500 identities trace to one radio and collapse. One genuine moving track survives — '+
+      '<b style="color:#8affd3">'+D.geometry.genuine_serial+'</b>.';
+    // flood gauge
+    var pct=Math.round(D.flood.confidence*100);
+    var vr=document.getElementById('vring');
+    vr.style.background='conic-gradient(var(--red) '+pct+'%, #15212e 0)';
+    vr.style.setProperty('--p',pct);
+    document.getElementById('vpct').textContent=pct+'%';
+    var vm=document.getElementById('vmeta'); vm.classList.add('flooded');
+    document.getElementById('vlevel').textContent=cap1(D.flood.level);
+    document.getElementById('sReal').textContent='1';
+
+    // tracks
+    var real=realTrack(), fake=fakeTrack();
+    var host=document.getElementById('tracks'); host.innerHTML='';
+    host.appendChild(trackCard(real,'real'));
+    host.appendChild(trackCard(fake,'fake'));
+    document.getElementById('resultSec').classList.remove('hidden');
+  }
+
+  function trackCard(t, cls){
+    var el=document.createElement('div'); el.className='track '+cls;
+    var title = cls==='real' ? 'Most likely REAL' : 'Flood source';
+    var color = cls==='real' ? 'var(--green)' : 'var(--red)';
+    var scorePct = Math.round(t.real_score*100);
+    var sigs = (t.fake_signals||[]).map(function(s){
+      var meta=SIGTEXT[s]; return '<span class="tag hot">'+(meta?meta[0]:s)+'</span>'; }).join('');
+    var reasonList;
+    if(cls==='real'){
+      reasonList = (t.genuine_reasons||[]).map(function(r){ return '<li><b></b>'+cap1(r)+'</li>'; }).join('');
+    } else {
+      reasonList = (t.fake_signals||[]).map(function(s){
+        var meta=SIGTEXT[s]; return '<li><b>'+(meta?meta[0]:s)+':</b> '+(meta?meta[1](t):'')+'</li>'; }).join('');
+      // add the per-unit library reasons
+      (t.per_unit.reasons||[]).forEach(function(r){
+        reasonList += '<li style="opacity:.8"><b>'+r+':</b> '+(REASONTEXT[r]||'per-unit library reason')+'</li>'; });
+    }
+    el.innerHTML =
+      '<h3>'+title+' <span class="vd '+t.per_unit.verdict+'">'+t.per_unit.verdict+'</span></h3>'+
+      '<div class="addr">'+(t.uas_id||'—')+' &middot; radio '+t.transmitter+'</div>'+
+      '<div class="score"><div class="bar"><i style="width:'+scorePct+'%;background:'+color+'"></i></div>'+
+        '<b style="color:'+color+'">real '+t.real_score.toFixed(2)+'</b></div>'+
+      (sigs?('<div style="margin:6px 0 2px">'+sigs+'</div>'):'')+
+      '<ul class="reasons">'+reasonList+'</ul>';
+    return el;
+  }
+  function cap1(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  // prime stats from real data
+  var srcCount = Object.keys(D.geometry.fanout_distinct_ids_per_source).length;
+  document.getElementById('sSrc').textContent = srcCount - 1; // radios behind the fakes (exclude genuine)
+  document.getElementById('sIds').textContent = D.geometry.fake_id_count;
+  }
+})();
+</script>
+</body>
+</html>

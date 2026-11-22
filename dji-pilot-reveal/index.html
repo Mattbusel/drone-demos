@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DJI Pilot Reveal</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#111823; --panel2:#0d141d; --line:#1e2a3a;
+    --ink:#e6edf3; --muted:#8b9bb0; --dim:#5a6b80;
+    --drone:#4cc2ff; --pilot:#ff5c7a; --home:#ffd24c; --ok:#39d98a; --warn:#ff5c7a;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code','Consolas',monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+  body{min-height:100vh;display:flex;flex-direction:column}
+  header{padding:20px 24px 14px;border-bottom:1px solid var(--line)}
+  .kicker{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--drone)}
+  h1{margin:8px 0 6px;font-size:23px;font-weight:650;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13.5px;max-width:720px;line-height:1.5}
+  main{flex:1;display:grid;grid-template-columns:1.5fr 1fr;gap:1px;background:var(--line);min-height:0}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  .stage{background:var(--panel2);position:relative;min-height:440px}
+  #map{display:block;width:100%;height:100%}
+  .side{background:var(--panel);padding:18px 20px;overflow:auto}
+  .controls{position:absolute;left:16px;top:16px;right:16px;display:flex;gap:10px;flex-wrap:wrap;z-index:5}
+  .btn{font:600 12.5px var(--sans);color:var(--ink);background:rgba(20,28,40,.82);
+       border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;
+       backdrop-filter:blur(6px);transition:.15s}
+  .btn:hover{border-color:var(--drone);color:#fff}
+  .btn.primary{background:rgba(76,194,255,.14);border-color:rgba(76,194,255,.5);color:#bfe6ff}
+  .phase{position:absolute;left:16px;bottom:16px;z-index:5;font:500 12px var(--mono);
+         color:var(--muted);background:rgba(10,14,20,.7);border:1px solid var(--line);
+         padding:7px 11px;border-radius:7px;backdrop-filter:blur(6px)}
+  .legend{position:absolute;right:16px;bottom:16px;z-index:5;background:rgba(10,14,20,.7);
+          border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:11.5px;
+          color:var(--muted);backdrop-filter:blur(6px);line-height:1.9}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .side h2{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--dim);margin:0 0 12px}
+  .field{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+         padding:9px 0;border-bottom:1px solid var(--line);opacity:0;transform:translateY(4px);
+         transition:opacity .4s,transform .4s}
+  .field.on{opacity:1;transform:none}
+  .field .k{color:var(--muted);font-size:12.5px}
+  .field .v{font:600 13.5px var(--mono);color:var(--ink);text-align:right}
+  .field .v small{color:var(--dim);font-weight:400}
+  .field.hero .v{color:var(--pilot)}
+  .badge{display:inline-flex;align-items:center;gap:6px;font:600 11px var(--mono);
+         padding:3px 8px;border-radius:999px;border:1px solid}
+  .badge.ok{color:var(--ok);border-color:rgba(57,217,138,.4);background:rgba(57,217,138,.08)}
+  .reveal-note{margin-top:16px;padding:12px 14px;border:1px solid rgba(255,92,122,.3);
+     background:rgba(255,92,122,.07);border-radius:9px;font-size:12.5px;color:#ffc3ce;
+     line-height:1.55;opacity:0;transition:opacity .5s}
+  .reveal-note.on{opacity:1}
+  .reveal-note b{color:#fff}
+  footer{border-top:1px solid var(--line);padding:14px 24px;font-size:12px;color:var(--muted);
+          line-height:1.55;display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline}
+  footer .cap{flex:1;min-width:280px}
+  footer code{font-family:var(--mono);color:var(--drone);font-size:11.5px}
+  .prov{color:var(--dim);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">Counter-UAS &middot; remoteid 0.3.3</div>
+  <h1>DJI Pilot Reveal</h1>
+  <p class="sub">A real DJI Mavic Air 2 DroneID frame, captured over the air and decoded by the
+     <code style="font-family:var(--mono);color:var(--drone)">remoteid</code> crate. Standard Remote ID broadcasts the aircraft.
+     DJI DroneID broadcasts something else too: the live position of the person flying it.</p>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="controls">
+      <button class="btn primary" id="play">Replay</button>
+      <button class="btn" id="step1">1 &middot; Aircraft only</button>
+      <button class="btn" id="step2">2 &middot; Reveal operator</button>
+    </div>
+    <canvas id="map"></canvas>
+    <div class="phase" id="phase">Decoding frame&hellip;</div>
+    <div class="legend">
+      <div><span class="dot" style="background:var(--drone)"></span>Aircraft (in flight)</div>
+      <div><span class="dot" style="background:var(--home)"></span>Home / take-off point</div>
+      <div><span class="dot" style="background:var(--pilot)"></span>Pilot (operator phone)</div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <h2>Decoded DroneID frame</h2>
+    <div id="fields"></div>
+    <div class="reveal-note" id="note">
+      <b>What just happened.</b> Standard Remote ID shows the drone. DJI DroneID also carries the
+      operator's live GNSS fix, so <b>remoteid</b> decodes exactly where the pilot is standing
+      &mdash; here, <b>18 m</b> from the take-off point.
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <div class="cap">
+    <b style="color:var(--ink)">What you are seeing:</b> every value is the real decode of one
+    91-byte OcuSync DroneID payload by <code>remoteid::dji::FlightInfo::decode</code> (CRC checked).
+    The drone pin, home pin and pilot pin are the exact aircraft, home and operator-phone
+    coordinates carried in that one frame. Nothing here is invented.
+  </div>
+  <div class="prov" id="prov">source loading&hellip;</div>
+</footer>
+
+<script id="realdata" type="application/json">
+{"frames":[{"aircraft":null,"altitude_m":0.0,"capture":"mini2","crc_check_passed":true,"gps_time_ms":1648558221652,"height_m":0.0,"home":null,"model":"Mini 2","pilot":{"lat":51.44719822772542,"lon":7.266531507168714},"product_type_code":63,"reference_crc_label":"True","sequence":786,"serial":"SysSecWasHere ","uuid":null,"version":2,"yaw_deg":95.75},{"aircraft":null,"altitude_m":0.0,"capture":"mini2","crc_check_passed":true,"gps_time_ms":1648558226658,"height_m":0.0,"home":null,"model":"Mini 2","pilot":{"lat":51.44719822772542,"lon":7.266531507168714},"product_type_code":63,"reference_crc_label":"True","sequence":787,"serial":"SysSecWasHere ","uuid":null,"version":2,"yaw_deg":95.77999877929688},{"aircraft":{"lat":51.44635597976657,"lon":7.267219056522872},"altitude_m":42.97679901123047,"capture":"mavic_air_2","crc_check_passed":true,"gps_time_ms":1650542026258,"height_m":12.801600456237793,"home":{"lat":51.44628149525321,"lon":7.267356566393702},"model":"Mavic Air 2","pilot":{"lat":51.44622992905165,"lon":7.267104464963845},"product_type_code":58,"reference_crc_label":"True","sequence":591,"serial":"1WNBH3900201N1","uuid":"1143635532171534336","version":2,"yaw_deg":-132.9499969482422}],"payload_file":"remoteid/tests/data/dji_droneid_payloads.txt","provenance":"NDSS 2023 RUB-SysSec/DroneSecurity captures (samples/mini2_sm, samples/mavic_air_2)","source":"remoteid 0.3.3 remoteid::dji::FlightInfo::decode"}
+</script>
+
+<script>
+(function(){
+  "use strict";
+  // Real crate output. Prefer the external data file (frames.json); fall back to the
+  // inlined copy so the page also works by double-click with no server.
+  var DATA = JSON.parse(document.getElementById('realdata').textContent);
+  var HERO = DATA.frames.find(function(f){return f.capture==='mavic_air_2';});
+
+  fetch('frames.json').then(function(r){return r.json();}).then(function(d){
+    var h = d.frames.find(function(f){return f.capture==='mavic_air_2';});
+    if(h){ HERO = h; build(); }
+  }).catch(function(){ /* offline / file://: inlined copy already loaded */ });
+
+  document.getElementById('prov').textContent = DATA.provenance;
+
+  // ---- geo helpers ----
+  function haversine(a,b){
+    var R=6371000, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+    var la1=a.lat*Math.PI/180, la2=b.lat*Math.PI/180;
+    var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+  function fmtCoord(v,pos,neg){ return Math.abs(v).toFixed(6)+'° '+(v>=0?pos:neg); }
+  function fmtTime(ms){ return new Date(ms).toISOString().replace('T',' ').replace('.000Z',' UTC'); }
+
+  var canvas=document.getElementById('map'), ctx=canvas.getContext('2d'), DPR=1, W=0, H=0;
+  var proj=null, anim={t0:0, phase:0, pilotDrop:0, started:false};
+
+  function resize(){
+    var r=canvas.parentElement.getBoundingClientRect();
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width; H=r.height;
+    canvas.width=W*DPR; canvas.height=H*DPR;
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    buildProjection();
+  }
+
+  function buildProjection(){
+    if(!HERO) return;
+    var pts=[HERO.aircraft,HERO.home,HERO.pilot].filter(Boolean);
+    var lat0=pts.reduce(function(s,p){return s+p.lat;},0)/pts.length;
+    var lon0=pts.reduce(function(s,p){return s+p.lon;},0)/pts.length;
+    var mPerLat=111320, mPerLon=111320*Math.cos(lat0*Math.PI/180);
+    // meters relative to center
+    var mp=pts.map(function(p){return {x:(p.lon-lon0)*mPerLon, y:-(p.lat-lat0)*mPerLat};});
+    var minX=Math.min.apply(0,mp.map(function(p){return p.x;}));
+    var maxX=Math.max.apply(0,mp.map(function(p){return p.x;}));
+    var minY=Math.min.apply(0,mp.map(function(p){return p.y;}));
+    var maxY=Math.max.apply(0,mp.map(function(p){return p.y;}));
+    var spanX=Math.max(maxX-minX,10), spanY=Math.max(maxY-minY,10);
+    var pad=70;
+    var scale=Math.min((W-pad*2)/spanX,(H-pad*2)/spanY);
+    scale=Math.min(scale, 12); // cap zoom so tiny spans do not blow up
+    var cx=W/2, cy=H/2, midX=(minX+maxX)/2, midY=(minY+maxY)/2;
+    proj=function(p){
+      var x=(p.lon-lon0)*mPerLon, y=-(p.lat-lat0)*mPerLat;
+      return {x:cx+(x-midX)*scale, y:cy+(y-midY)*scale};
+    };
+    proj.scale=scale; proj.mPerLon=mPerLon;
+  }
+
+  function roundedPin(x,y,color,r){
+    // teardrop pin
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.bezierCurveTo(x-r,y-r*1.3, x-r,y-r*2.6, x,y-r*2.6);
+    ctx.bezierCurveTo(x+r,y-r*2.6, x+r,y-r*1.3, x,y);
+    ctx.closePath();
+    ctx.fillStyle=color; ctx.shadowColor=color; ctx.shadowBlur=14; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(x,y-r*1.55,r*0.42,0,7); ctx.fillStyle='rgba(10,14,20,.85)'; ctx.fill();
+    ctx.restore();
+  }
+
+  function droneIcon(x,y,color,yaw,t){
+    ctx.save();
+    ctx.translate(x,y);
+    // pulsing detection ring
+    var pr=16+Math.sin(t/420)*3;
+    ctx.beginPath(); ctx.arc(0,0,pr+14,0,7);
+    ctx.strokeStyle='rgba(76,194,255,.25)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,pr+26,0,7);
+    ctx.strokeStyle='rgba(76,194,255,.12)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.rotate((yaw||0)*Math.PI/180);
+    // quad body
+    var a=11;
+    ctx.strokeStyle=color; ctx.lineWidth=2.4; ctx.lineCap='round';
+    [[-1,-1],[1,1],[-1,1],[1,-1]].forEach(function(d){
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(d[0]*a,d[1]*a); ctx.stroke();
+      ctx.beginPath(); ctx.arc(d[0]*a,d[1]*a,4.2,0,7);
+      ctx.fillStyle='rgba(10,14,20,.9)'; ctx.fill();
+      ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+    });
+    ctx.beginPath(); ctx.arc(0,0,4,0,7); ctx.fillStyle=color;
+    ctx.shadowColor=color; ctx.shadowBlur=12; ctx.fill(); ctx.shadowBlur=0;
+    ctx.restore();
+  }
+
+  function grid(){
+    ctx.fillStyle='#0d141d'; ctx.fillRect(0,0,W,H);
+    // meter grid based on scale (25 m cells)
+    if(!proj) return;
+    var cell=25*proj.scale;
+    ctx.strokeStyle='rgba(30,42,58,.55)'; ctx.lineWidth=1;
+    if(cell>6){
+      var ox=(W/2)%cell, oy=(H/2)%cell;
+      for(var x=ox;x<W;x+=cell){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+      for(var y=oy;y<H;y+=cell){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    }
+    // scale bar: 25 m
+    var bx=22, by=H-28, bl=25*proj.scale;
+    ctx.strokeStyle='rgba(139,155,176,.8)'; ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+bl,by);
+    ctx.moveTo(bx,by-4);ctx.lineTo(bx,by+4);ctx.moveTo(bx+bl,by-4);ctx.lineTo(bx+bl,by+4);ctx.stroke();
+    ctx.fillStyle='rgba(139,155,176,.9)'; ctx.font='11px '+getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx.fillText('25 m', bx+bl+8, by+4);
+  }
+
+  function label(x,y,text,color,dy){
+    ctx.font='600 11.5px system-ui'; var w=ctx.measureText(text).width;
+    ctx.fillStyle='rgba(10,14,20,.82)';
+    var ly=y+dy;
+    ctx.fillRect(x-w/2-7, ly-11, w+14, 18);
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.fillText(text, x, ly+2);
+    ctx.textAlign='left';
+  }
+
+  function render(t){
+    grid();
+    if(!proj||!HERO){ requestAnimationFrame(render); return; }
+    var A=proj(HERO.aircraft), Hm=proj(HERO.home), P=proj(HERO.pilot);
+    var showPilot=anim.pilotDrop;
+
+    // home pin (take-off) always after phase>=1
+    if(anim.phase>=1){
+      roundedPin(Hm.x,Hm.y,'#ffd24c',7);
+      label(Hm.x,Hm.y,'HOME',' #ffd24c',16);
+    }
+
+    // line drone -> pilot, grows with pilotDrop
+    if(showPilot>0){
+      ctx.save();
+      ctx.setLineDash([6,5]);
+      ctx.strokeStyle='rgba(255,92,122,'+(0.35+0.4*showPilot)+')';
+      ctx.lineWidth=2;
+      var mx=A.x+(P.x-A.x)*showPilot, my=A.y+(P.y-A.y)*showPilot;
+      ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(mx,my);ctx.stroke();
+      ctx.restore();
+      // distance label at midpoint
+      if(showPilot>0.6){
+        var d=haversine(HERO.aircraft,HERO.pilot);
+        label((A.x+P.x)/2,(A.y+P.y)/2,d.toFixed(0)+' m to operator','#ff9fb0',-2);
+      }
+    }
+
+    // pilot pin drops in
+    if(showPilot>0){
+      var dropY=P.y-(1-showPilot)*60;
+      ctx.globalAlpha=Math.min(1,showPilot*1.4);
+      roundedPin(P.x,dropY,'#ff5c7a',9);
+      label(P.x,dropY,'PILOT',' #ff5c7a',16);
+      ctx.globalAlpha=1;
+    }
+
+    // drone last (on top)
+    droneIcon(A.x,A.y,'#4cc2ff',HERO.yaw_deg,t);
+    label(A.x,A.y,HERO.model+'  ·  '+HERO.altitude_m.toFixed(0)+' m AGL','#9fe0ff',-26);
+
+    requestAnimationFrame(render);
+  }
+
+  // ---- field panel + sequencing ----
+  var FIELDS=[];
+  function build(){
+    buildProjection();
+    FIELDS=[
+      ['Model', HERO.model+' <small>('+HERO.product_type_code+')</small>'],
+      ['Serial', HERO.serial.trim()],
+      ['Sequence', '#'+HERO.sequence],
+      ['GPS time', '<small>'+fmtTime(HERO.gps_time_ms)+'</small>'],
+      ['Aircraft', fmtCoord(HERO.aircraft.lat,'N','S')+' , '+fmtCoord(HERO.aircraft.lon,'E','W')],
+      ['Altitude', HERO.altitude_m.toFixed(1)+' m <small>AGL '+HERO.height_m.toFixed(1)+' m</small>'],
+      ['Home point', fmtCoord(HERO.home.lat,'N','S')+' , '+fmtCoord(HERO.home.lon,'E','W')],
+      ['CRC check', '<span class="badge ok">✓ PASS</span>', 'badge'],
+      ['Pilot (operator)', fmtCoord(HERO.pilot.lat,'N','S')+' , '+fmtCoord(HERO.pilot.lon,'E','W'), 'hero'],
+      ['Drone → pilot', haversine(HERO.aircraft,HERO.pilot).toFixed(1)+' m', 'hero'],
+    ];
+    var box=document.getElementById('fields'); box.innerHTML='';
+    FIELDS.forEach(function(f){
+      var d=document.createElement('div');
+      d.className='field'+(f[2]==='hero'?' hero':'');
+      d.innerHTML='<span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span>';
+      box.appendChild(d);
+    });
+    // update note distance with real home->pilot value
+    var hp=haversine(HERO.home,HERO.pilot).toFixed(0);
+    document.getElementById('note').innerHTML=
+      '<b>What just happened.</b> Standard Remote ID shows the drone. DJI DroneID also carries the '+
+      'operator’s live GNSS fix, so <b>remoteid</b> decodes exactly where the pilot is standing '+
+      '&mdash; here, <b>'+hp+' m</b> from the take-off point.';
+  }
+
+  var fieldEls=function(){return document.querySelectorAll('.field');};
+  var revealTimers=[];
+  function clearTimers(){revealTimers.forEach(clearTimeout);revealTimers=[];}
+
+  function toStep1(){ // aircraft only
+    clearTimers();
+    anim.phase=1;
+    tweenPilot(anim.pilotDrop,0,500);
+    document.getElementById('note').classList.remove('on');
+    document.getElementById('phase').textContent='Phase 1 — Standard Remote ID: aircraft + home';
+    var els=fieldEls();
+    els.forEach(function(e){e.classList.remove('on');});
+    // reveal non-pilot fields progressively
+    [0,1,2,3,4,5,6,7].forEach(function(i,k){
+      revealTimers.push(setTimeout(function(){els[i]&&els[i].classList.add('on');}, 120+k*130));
+    });
+  }
+  function toStep2(){ // reveal operator
+    clearTimers();
+    anim.phase=1;
+    fieldEls().forEach(function(e){e.classList.add('on');});
+    document.getElementById('phase').textContent='Phase 2 — DJI DroneID: operator position revealed';
+    tweenPilot(anim.pilotDrop,1,900);
+    revealTimers.push(setTimeout(function(){
+      document.getElementById('note').classList.add('on');
+    },700));
+  }
+  var pilotTween=null;
+  function tweenPilot(from,to,dur){
+    if(pilotTween)cancelAnimationFrame(pilotTween);
+    var s=performance.now();
+    function f(now){
+      var k=Math.min(1,(now-s)/dur);
+      var e=to>from? (1-Math.pow(1-k,3)) : k; // easeOutCubic on drop
+      anim.pilotDrop=from+(to-from)*e;
+      if(k<1)pilotTween=requestAnimationFrame(f);
+    }
+    pilotTween=requestAnimationFrame(f);
+  }
+
+  function play(){
+    toStep1();
+    revealTimers.push(setTimeout(toStep2, 1600));
+  }
+
+  document.getElementById('play').onclick=play;
+  document.getElementById('step1').onclick=toStep1;
+  document.getElementById('step2').onclick=toStep2;
+
+  window.addEventListener('resize',resize);
+  // init
+  build(); resize(); requestAnimationFrame(render);
+  setTimeout(play, 500);
+})();
+</script>
+</body>
+</html>
