@@ -30,3 +30,13 @@ The stack is receive-only. There is no transmit path anywhere in this code.
 - [misb](https://crates.io/crates/misb) 0.4.1
 - [flightlog-core](https://crates.io/crates/flightlog-core) 0.2.0
 - [mavlink-tlog](https://crates.io/crates/mavlink-tlog) 0.1.4
+
+## Credits
+
+The decoding these demos visualize stands on the open reverse-engineering work of the drone-RF community:
+
+- **DJI DroneID** decoding is based on the reverse engineering by [proto17/dji_droneid](https://github.com/proto17/dji_droneid) and the academic work of the NDSS 2023 DroneID team (Schiller et al., RUB/CISPA). The DJI test payloads come from their published captures.
+- **Open Drone ID / ASTM F3411** follows the [opendroneid](https://github.com/opendroneid) reference and the ASTM F3411 / ASD-STAN prEN 4709-002 specs.
+- Spoofer fingerprints reference the public tools by cyber-defence-campus and jjshoots.
+
+All decoding and detection in these demos is done by the open-source Rust crates: [remoteid](https://crates.io/crates/remoteid), [remoteid-sentinel](https://crates.io/crates/remoteid-sentinel), [remoteid-scenario](https://crates.io/crates/remoteid-scenario), [uas-cot](https://crates.io/crates/uas-cot), [misb](https://crates.io/crates/misb), [flightlog-core](https://crates.io/crates/flightlog-core). Scenarios are simulated; the decode and verdicts are real.
