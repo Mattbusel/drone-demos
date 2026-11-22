@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drone Stack Reveal</title>
+<meta name="description" content="A cinematic 90-second reveal reel for the open-source drone Remote ID stack: remoteid, sentinel, uas-cot, misb, logs and a $6 chip. Real data, one continuous timeline, built to be screen-recorded at 1920x1080.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#05070a;
+  --ink:#c7d2cc;
+  --dim:#5a6a70;
+  --faint:#28343b;
+  --amber:#ffb000;
+  --green:#39ff14;
+  --red:#ff3b47;
+  --line:#141c23;
+  --cond:"Oswald","Bebas Neue","Arial Narrow",sans-serif;
+  --mono:"JetBrains Mono","SF Mono","Cascadia Mono","Courier New",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center;font-family:var(--mono);color:var(--ink)}
+
+/* fixed 1920x1080 stage, scaled to fit the window; record fullscreen at 1080p */
+#stage{
+  position:relative;width:1920px;height:1080px;background:var(--bg);
+  transform-origin:center center;overflow:hidden;
+  background-image:
+    radial-gradient(1400px 900px at 78% -8%, #0a131c 0%, transparent 62%),
+    radial-gradient(1200px 800px at -6% 112%, #080f15 0%, transparent 58%);
+}
+
+/* film grain */
+#stage::before{
+  content:"";position:absolute;inset:-50%;z-index:90;pointer-events:none;opacity:.055;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  animation:grain .5s steps(3) infinite;mix-blend-mode:overlay;
+}
+@keyframes grain{
+  0%{transform:translate(0,0)}33%{transform:translate(-6px,4px)}66%{transform:translate(5px,-5px)}100%{transform:translate(0,0)}
+}
+/* faint CRT scanlines */
+#stage::after{
+  content:"";position:absolute;inset:0;z-index:91;pointer-events:none;opacity:.35;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.26) 0 1px, transparent 1px 3px);
+  mix-blend-mode:multiply;
+}
+/* vignette */
+#vig{position:absolute;inset:0;z-index:80;pointer-events:none;
+  box-shadow:inset 0 0 340px 70px rgba(0,0,0,.92);}
+
+.scene{position:absolute;inset:0;opacity:0;will-change:opacity}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+
+/* kicker / label styling */
+.kick{font-family:var(--cond);text-transform:uppercase;font-weight:600;letter-spacing:.42em;
+  color:var(--amber);font-size:17px}
+.kick.g{color:var(--green)}
+.mono{font-family:var(--mono)}
+.dim{color:var(--dim)}
+
+/* ===== S0 cold open ===== */
+#s0 .line{font-family:var(--cond);font-weight:300;letter-spacing:.015em;font-size:52px;line-height:1.3;
+  color:#e7efe9;max-width:1240px;text-align:center}
+#s0 .line .hl{color:var(--amber);font-weight:400}
+#s0 .line .hl2{color:var(--green);font-weight:400}
+#s0 .caret{display:inline-block;width:16px;height:46px;background:var(--amber);margin-left:8px;
+  transform:translateY(8px);box-shadow:0 0 18px var(--amber)}
+#s0 .mark{margin-top:64px;opacity:0}
+#s0 .mark .brand{font-family:var(--cond);font-weight:600;letter-spacing:.62em;font-size:30px;color:#eef3ee}
+#s0 .mark .sub{margin-top:14px;font-size:13px;letter-spacing:.46em;color:var(--dim);text-transform:uppercase}
+#s0 .mark .rule{width:0;height:1px;background:linear-gradient(90deg,transparent,var(--amber),transparent);margin:22px auto 0}
+
+/* ===== S1 intercept ===== */
+#s1{padding:96px 120px}
+#s1 .head{display:flex;align-items:baseline;gap:26px;margin-bottom:26px}
+#s1 .head .crate{font-family:var(--cond);font-size:30px;letter-spacing:.18em;color:#eef3ee;text-transform:uppercase}
+#s1 .head .crate b{color:var(--green);font-weight:600}
+#s1 .head .spec{font-size:13px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase}
+#grid{position:relative;display:grid;grid-template-columns:repeat(13,1fr);gap:8px 10px;max-width:1360px}
+.by{position:relative;font-family:var(--mono);font-size:26px;letter-spacing:.04em;text-align:center;
+  padding:12px 0;color:#2a363d;background:#070c11;border:1px solid #0e161d;border-radius:3px;
+  transition:none}
+.by .bin{display:block;font-size:8px;letter-spacing:.06em;color:#17222a;margin-top:4px;height:9px}
+#scanbar{position:absolute;top:0;width:3px;height:100%;
+  background:linear-gradient(180deg,transparent,var(--green),transparent);
+  box-shadow:0 0 22px 5px rgba(57,255,20,.5);opacity:0;z-index:5}
+#s1 .foot{margin-top:40px;display:flex;gap:46px;font-size:15px;letter-spacing:.14em;color:var(--dim)}
+#s1 .foot b{color:var(--ink);font-weight:500}
+#s1 .foot .on{color:var(--green)}
+
+/* ===== S2 identify ===== */
+#s2{padding:80px 110px}
+#s2 .top{display:flex;align-items:baseline;gap:24px;margin-bottom:30px}
+#s2 .top .k{font-family:var(--cond);font-size:26px;letter-spacing:.2em;color:#eef3ee;text-transform:uppercase}
+#s2 .wrap2{display:grid;grid-template-columns:720px 1fr;gap:60px;align-items:start}
+.fcard{opacity:0;transform:translateY(14px);border-left:2px solid var(--faint);padding:12px 20px;margin-bottom:18px;background:linear-gradient(90deg,rgba(255,176,0,.025),transparent)}
+.fcard .fl{font-size:12px;letter-spacing:.34em;color:var(--dim);text-transform:uppercase}
+.fcard .fv{font-family:var(--cond);font-size:38px;letter-spacing:.02em;color:#eef3ee;margin-top:4px;line-height:1}
+.fcard .fv .u{color:var(--amber)}
+.fcard.id{border-left-color:var(--amber)}
+.fcard.pilot{border-left-color:var(--green)}
+.fcard.pilot .fv{color:var(--green)}
+
+/* mini scope for pins */
+#scope2{position:relative;width:560px;height:560px;margin-top:6px;border:1px solid var(--line);border-radius:6px;
+  background:
+    linear-gradient(0deg,rgba(57,255,20,.015),rgba(57,255,20,.015)),
+    repeating-linear-gradient(0deg,transparent 0 55px,rgba(42,74,60,.14) 55px 56px),
+    repeating-linear-gradient(90deg,transparent 0 55px,rgba(42,74,60,.14) 55px 56px),
+    #050a0c;overflow:hidden}
+#scope2 .cx{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(42,74,60,.4)}
+#scope2 .cy{position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(42,74,60,.4)}
+.pin{position:absolute;transform:translate(-50%,-50%);opacity:0}
+.pin .dot{width:16px;height:16px;border-radius:50%;margin:0 auto}
+.pin .rng{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;opacity:.5}
+.pin .lab{position:absolute;left:24px;top:-8px;white-space:nowrap;font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.pin.air .dot{background:var(--amber);box-shadow:0 0 16px var(--amber)}
+.pin.air .lab{color:var(--amber)}
+.pin.air .rng{width:64px;height:64px;border:1px solid rgba(255,176,0,.4)}
+.pin.pil .dot{background:var(--green);box-shadow:0 0 18px var(--green)}
+.pin.pil .lab{color:var(--green)}
+.pin.pil .rng{width:72px;height:72px;border:1px solid rgba(57,255,20,.5)}
+#linkap{position:absolute;height:1px;background:linear-gradient(90deg,var(--amber),var(--green));transform-origin:left center;opacity:0;z-index:2;box-shadow:0 0 8px rgba(57,255,20,.4)}
+#opflash{position:absolute;left:50%;top:50%;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(circle,rgba(57,255,20,.55),transparent 70%);opacity:0;z-index:1;pointer-events:none}
+#oploc{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);text-align:center;opacity:0;z-index:3}
+#oploc .k2{font-family:var(--cond);font-size:20px;letter-spacing:.44em;color:var(--green);text-transform:uppercase;text-shadow:0 0 18px rgba(57,255,20,.5)}
+#oploc .big{font-family:var(--cond);font-weight:500;font-size:58px;letter-spacing:.06em;color:var(--green);line-height:1;margin-top:6px;text-shadow:0 0 30px rgba(57,255,20,.6)}
+#oploc .d{font-size:12px;letter-spacing:.3em;color:var(--dim);margin-top:8px;text-transform:uppercase}
+
+/* ===== S3 pullback / S4 sentinel share a big scope ===== */
+#bigscope{position:absolute;left:50%;top:52%;width:1180px;height:900px;transform:translate(-50%,-50%);
+  border-radius:50%;opacity:0}
+#bigscope .ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;border:1px solid rgba(42,74,60,.5)}
+#bigscope .cross{position:absolute;background:rgba(42,74,60,.4)}
+#sweep{position:absolute;left:50%;top:50%;width:50%;height:50%;transform-origin:left top;
+  background:conic-gradient(from 0deg, rgba(57,255,20,.28), transparent 42deg);opacity:0}
+#contacts{position:absolute;inset:0}
+.ct{position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);
+  background:var(--red);opacity:0;box-shadow:0 0 6px rgba(255,59,71,.6)}
+.ct.fake{background:#7a4b2e;box-shadow:none}
+#realct{position:absolute;transform:translate(-50%,-50%);opacity:0;z-index:4}
+#realct .d{width:16px;height:16px;border-radius:50%;background:var(--green);box-shadow:0 0 20px var(--green);margin:0 auto}
+#realct .p{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;border:2px solid var(--green)}
+
+#s3cap,#s4cap{position:absolute;left:50%;transform:translateX(-50%);text-align:center;opacity:0;z-index:6}
+#s3cap{top:88px}
+#s4cap{top:70px}
+.capbig{font-family:var(--cond);text-transform:uppercase;font-size:40px;letter-spacing:.14em;color:#eef3ee}
+.capbig .n{color:var(--amber)}
+.capsub{margin-top:10px;font-size:15px;letter-spacing:.26em;color:var(--dim);text-transform:uppercase}
+#ctr{position:absolute;left:50%;top:60%;transform:translate(-50%,-50%);text-align:center;opacity:0;z-index:6}
+#ctr .num{font-family:var(--cond);font-size:128px;font-weight:300;letter-spacing:.03em;color:#eef3ee;line-height:.9;font-variant-numeric:tabular-nums}
+#ctr .num.real{color:var(--green);text-shadow:0 0 34px rgba(57,255,20,.5)}
+#ctr .lab{font-size:14px;letter-spacing:.42em;color:var(--dim);text-transform:uppercase;margin-top:10px}
+#verdict{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);text-align:center;opacity:0;z-index:6}
+#verdict .vrow{display:flex;gap:40px;align-items:center;justify-content:center;font-family:var(--mono)}
+#verdict .tag{font-family:var(--cond);font-size:30px;letter-spacing:.3em;text-transform:uppercase}
+#verdict .flood{color:var(--red)}
+#verdict .real{color:var(--green)}
+#verdict .sub{margin-top:14px;font-size:14px;letter-spacing:.2em;color:var(--dim)}
+#verdict .sub b{color:var(--ink)}
+
+/* ===== S5 share ===== */
+#s5{padding:70px 120px}
+#s5 .top{display:flex;align-items:baseline;gap:22px;margin-bottom:26px}
+#s5 .top .k{font-family:var(--cond);font-size:26px;letter-spacing:.2em;color:#eef3ee;text-transform:uppercase}
+#s5 .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:34px;height:720px}
+.panel{opacity:0;transform:translateY(16px);border:1px solid var(--line);border-radius:6px;padding:26px;position:relative;
+  background:linear-gradient(180deg,#070d12,#060a0e)}
+.panel .pk{font-family:var(--cond);font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:#eef3ee}
+.panel .pk b{color:var(--green);font-weight:600}
+.panel .ps{font-size:12px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-top:6px}
+/* TAK panel */
+#takmap{position:relative;flex:1;margin-top:20px;height:520px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+  background:
+    repeating-linear-gradient(0deg,transparent 0 46px,rgba(42,74,60,.12) 46px 47px),
+    repeating-linear-gradient(90deg,transparent 0 46px,rgba(42,74,60,.12) 46px 47px),
+    #050a0c}
+.milsym{position:absolute;transform:translate(-50%,-50%);opacity:0}
+.milsym .frame{width:54px;height:40px;border:2px solid var(--green);border-radius:6px}
+.milsym.hostile .frame{border-color:var(--red);transform:rotate(45deg);border-radius:4px}
+.milsym .cap{position:absolute;left:50%;top:46px;transform:translateX(-50%);white-space:nowrap;font-size:11px;letter-spacing:.14em;color:var(--dim)}
+#takline{position:absolute;height:2px;background:linear-gradient(90deg,var(--green),transparent);transform-origin:left;opacity:0}
+/* KLV HUD */
+#klv{position:relative;flex:1;margin-top:20px;height:520px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#04080b}
+#klv .reticle{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:120px;height:120px;border:1px solid rgba(255,176,0,.5);opacity:0}
+#klv .reticle:before,#klv .reticle:after{content:"";position:absolute;background:rgba(255,176,0,.5)}
+#klv .reticle:before{left:50%;top:-20px;bottom:-20px;width:1px;transform:translateX(-50%)}
+#klv .reticle:after{top:50%;left:-20px;right:-20px;height:1px;transform:translateY(-50%)}
+.hud{position:absolute;font-size:12px;letter-spacing:.14em;color:var(--amber);opacity:0;font-family:var(--mono)}
+/* logs */
+#logs{margin-top:20px;font-size:13px;line-height:1.9;color:var(--dim)}
+#logs .lrow{opacity:0;display:flex;justify-content:space-between;border-bottom:1px dashed #10181e;padding:5px 0}
+#logs .lrow b{color:var(--ink);font-weight:500}
+#logs .lrow .g{color:var(--green)}
+
+/* ===== S6 kicker / endcard ===== */
+#s6 .chip{opacity:0;text-align:center}
+#s6 .chip .big{font-family:var(--cond);font-weight:300;font-size:70px;letter-spacing:.02em;color:#eef3ee}
+#s6 .chip .big b{color:var(--amber);font-weight:500}
+#s6 .chip .sub{margin-top:14px;font-size:15px;letter-spacing:.34em;color:var(--dim);text-transform:uppercase}
+#s6 .board{display:inline-block;margin-top:28px;border:1px solid #243c2a;border-radius:6px;padding:14px 22px;
+  font-family:var(--mono);font-size:14px;letter-spacing:.14em;color:var(--green);opacity:0;background:rgba(57,255,20,.04)}
+#s6 .endcard{opacity:0;text-align:center}
+#s6 .endcard .crates{display:grid;grid-template-columns:repeat(2,auto);gap:12px 56px;justify-content:center;margin:0 auto}
+#s6 .crates .cr{opacity:0;display:flex;align-items:baseline;gap:16px;font-size:16px;letter-spacing:.06em;text-align:left}
+#s6 .crates .cr .nm{font-family:var(--mono);color:var(--green);min-width:200px}
+#s6 .crates .cr .de{font-family:var(--mono);color:var(--dim);font-size:13px}
+#s6 .endcard .url{margin-top:50px;font-family:var(--cond);font-size:30px;letter-spacing:.24em;color:var(--amber);text-transform:lowercase;opacity:0}
+#s6 .endcard .tag{margin-top:16px;font-size:15px;letter-spacing:.42em;color:var(--dim);text-transform:uppercase;opacity:0}
+#s6 .endcard .oss{margin-top:8px;font-size:12px;letter-spacing:.3em;color:var(--faint);text-transform:uppercase;opacity:0}
+
+#fade{position:absolute;inset:0;background:#000;z-index:95;opacity:0;pointer-events:none}
+
+/* top corner classification bar, always faint */
+#clbar{position:absolute;top:26px;left:0;right:0;display:flex;justify-content:space-between;
+  padding:0 60px;font-size:11px;letter-spacing:.4em;color:#2d3a41;text-transform:uppercase;z-index:70;opacity:0}
+#tcode{position:absolute;bottom:24px;right:60px;font-size:11px;letter-spacing:.3em;color:#2d3a41;z-index:70;opacity:0}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="clbar"><span>TENSORUST // OPEN SOURCE REMOTE ID</span><span id="clock">T+00:00</span></div>
+
+  <!-- S0 COLD OPEN -->
+  <div class="scene center" id="s0">
+    <div class="line"><span id="s0txt"></span><span class="caret" id="caret"></span></div>
+    <div class="mark" id="mark">
+      <div class="brand">TENSORUST</div>
+      <div class="rule" id="markrule"></div>
+      <div class="sub">Drone Signals Intelligence // Rust // no_std</div>
+    </div>
+  </div>
+
+  <!-- S1 INTERCEPT -->
+  <div class="scene" id="s1">
+    <div class="head">
+      <div class="crate"><b>remoteid</b> // intercept</div>
+      <div class="spec">ASTM F3411 + DJI DroneID decode // OcuSync broadcast, 91 bytes</div>
+    </div>
+    <div id="grid"><div id="scanbar"></div></div>
+    <div class="foot">
+      <div>SOURCE <b>OTA CAPTURE</b> // NDSS 2023</div>
+      <div>FRAME <b>FLIGHT_INFO v2</b></div>
+      <div>CRC-16 <b class="on">VALID</b></div>
+    </div>
+  </div>
+
+  <!-- S2 IDENTIFY -->
+  <div class="scene" id="s2">
+    <div class="top">
+      <div class="k">remoteid // identify</div>
+      <div class="spec" style="font-size:13px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase">fields resolve from the bytes</div>
+    </div>
+    <div class="wrap2">
+      <div>
+        <div class="fcard id" data-i="0"><div class="fl">UAS Serial</div><div class="fv">1WNBH3900201N1</div></div>
+        <div class="fcard id" data-i="1"><div class="fl">Model</div><div class="fv">Mavic Air <span class="u">2</span></div></div>
+        <div class="fcard" data-i="2"><div class="fl">Aircraft Position</div><div class="fv">51.4463560&deg;N&nbsp; 7.2672191&deg;E</div></div>
+        <div class="fcard" data-i="3"><div class="fl">Altitude // Height</div><div class="fv">141 <span class="u">/</span> 42 <span style="font-size:20px;color:var(--dim)">raw</span></div></div>
+        <div class="fcard pilot" data-i="4"><div class="fl">Operator Phone</div><div class="fv">51.4462299&deg;N&nbsp; 7.2671046&deg;E</div></div>
+      </div>
+      <div id="scope2">
+        <div class="cx"></div><div class="cy"></div>
+        <div id="linkap"></div>
+        <div id="opflash"></div>
+        <div class="pin air" id="pinair"><div class="rng"></div><div class="dot"></div><div class="lab">Aircraft</div></div>
+        <div class="pin pil" id="pinpil"><div class="rng"></div><div class="dot"></div><div class="lab">Operator</div></div>
+        <div id="oploc"><div class="k2">Operator Located</div><div class="big">16 M AWAY</div><div class="d">recovered from the same broadcast</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 + S4 share bigscope -->
+  <div class="scene" id="s3">
+    <div id="s3cap"><div class="capbig"><span class="n">500</span> broadcasts // one radio</div><div class="capsub">which one is actually flying</div></div>
+  </div>
+  <div class="scene" id="s4">
+    <div id="s4cap"><div class="capbig">remoteid-<span class="n">sentinel</span> // flood detection</div><div class="capsub">receive-only // 40,080 frames decoded // 10 s window</div></div>
+    <div id="ctr"><div class="num" id="ctrn">500</div><div class="lab" id="ctrl">broadcasts in the air</div></div>
+    <div id="verdict">
+      <div class="vrow">
+        <div class="tag flood">FLOODED&nbsp;&nbsp;1.00</div>
+        <div style="color:var(--faint)">|</div>
+        <div class="tag real">REAL TRACK&nbsp;&nbsp;0.90</div>
+      </div>
+      <div class="sub">genuine serial <b>1581CREAL7A4F2C91</b> &nbsp;//&nbsp; 500 fakes from one source <b>02:00:00:00:F0:00</b></div>
+    </div>
+  </div>
+  <div id="bigscope">
+    <div id="sweep"></div>
+    <div id="contacts"></div>
+    <div id="realct"><div class="p"></div><div class="d"></div></div>
+  </div>
+
+  <!-- S5 SHARE -->
+  <div class="scene" id="s5">
+    <div class="top">
+      <div class="k">share // the verified picture, everywhere</div>
+    </div>
+    <div class="cols">
+      <div class="panel" id="p-tak" style="display:flex;flex-direction:column">
+        <div class="pk"><b>uas-cot</b> // Remote ID to TAK</div>
+        <div class="ps">Cursor on Target // 2525 symbology</div>
+        <div id="takmap">
+          <div id="takline"></div>
+          <div class="milsym friend" id="sym-op"><div class="frame"></div><div class="cap">OPERATOR</div></div>
+          <div class="milsym hostile" id="sym-uas"><div class="frame"></div><div class="cap">UAS 1581CREAL</div></div>
+        </div>
+      </div>
+      <div class="panel" id="p-klv" style="display:flex;flex-direction:column">
+        <div class="pk"><b>misb</b> // KLV video metadata</div>
+        <div class="ps">ST 0601 // full-motion video HUD</div>
+        <div id="klv">
+          <div class="reticle"></div>
+          <div class="hud" style="left:18px;top:18px">LAT 51.44636</div>
+          <div class="hud" style="left:18px;top:42px">LON 07.26722</div>
+          <div class="hud" style="right:18px;top:18px;color:var(--green)">SENSOR LOCK</div>
+          <div class="hud" style="left:18px;bottom:48px">SLANT RNG 318 M</div>
+          <div class="hud" style="left:18px;bottom:24px">PLATFORM HDG 132.9</div>
+          <div class="hud" style="right:18px;bottom:24px">ST0601 TAG 13/14</div>
+        </div>
+      </div>
+      <div class="panel" id="p-logs">
+        <div class="pk"><b>mavlink-tlog</b> + <b>flightlog-core</b></div>
+        <div class="ps">What the aircraft recorded // after the flight</div>
+        <div id="logs">
+          <div class="lrow"><span>telemetry log</span><b>.tlog &rarr; 18,442 msgs</b></div>
+          <div class="lrow"><span>heartbeat</span><b>MAV_TYPE_QUADROTOR</b></div>
+          <div class="lrow"><span>GPS fix</span><b class="g">3D // 14 sats</b></div>
+          <div class="lrow"><span>flight time</span><b>00:11:38</b></div>
+          <div class="lrow"><span>max alt AGL</span><b>42.9 m</b></div>
+          <div class="lrow"><span>decode</span><b class="g">crc clean // no gaps</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S6 KICKER / ENDCARD -->
+  <div class="scene center" id="s6">
+    <div class="chip" id="chip">
+      <div class="big">A <b>$6 chip</b> runs all of it.</div>
+      <div class="sub">remoteid-esp32 // receive-only // offline</div>
+      <div class="board" id="board">[ ESP32 ]&nbsp;&nbsp;BLE 4/5 + Wi-Fi NaN&nbsp;&nbsp;//&nbsp;&nbsp;ASTM F3411&nbsp;&nbsp;//&nbsp;&nbsp;no_std firmware</div>
+    </div>
+    <div class="endcard" id="endcard">
+      <div class="crates">
+        <div class="cr"><span class="nm">remoteid</span><span class="de">decode // DJI DroneID // spoof + trust</span></div>
+        <div class="cr"><span class="nm">remoteid-sentinel</span><span class="de">flood + spoof detection</span></div>
+        <div class="cr"><span class="nm">uas-cot</span><span class="de">Remote ID to TAK (CoT)</span></div>
+        <div class="cr"><span class="nm">misb</span><span class="de">KLV video metadata (ST 0601)</span></div>
+        <div class="cr"><span class="nm">mavlink-tlog</span><span class="de">telemetry log parsing</span></div>
+        <div class="cr"><span class="nm">flightlog-core</span><span class="de">unified flight logs</span></div>
+        <div class="cr"><span class="nm">remoteid-esp32</span><span class="de">the $6 receiver</span></div>
+      </div>
+      <div class="url" id="url">mattbusel.github.io/drone-demos</div>
+      <div class="tag" id="etag">open source. auditable. yours.</div>
+      <div class="oss" id="eoss">Rust // no_std // no cloud // no account</div>
+    </div>
+  </div>
+
+  <div id="vig"></div>
+  <div id="fade"></div>
+  <div id="tcode"></div>
+</div>
+
+<script>
+/* ============ real data ============ */
+const HEX = "5810024f02f71f31574e4248333930303230314e310000915a13008b0289008d002a00feff02001a0011cc129ef84b80010000750289007d5a1300a95a13007e0289003a13313134333633353533323137313533343333360048b0";
+const BYTES=[]; for(let i=0;i<HEX.length;i+=2) BYTES.push(parseInt(HEX.substr(i,2),16));
+// field class per byte offset (for coloring reveal)
+const FIELDS=[
+ {o:0,l:3,c:'meta'},{o:3,l:4,c:'aux'},{o:7,l:16,c:'id'},{o:23,l:4,c:'pos'},{o:27,l:4,c:'pos'},
+ {o:31,l:12,c:'aux'},{o:43,l:8,c:'time'},{o:51,l:8,c:'pilot'},{o:59,l:8,c:'home'},
+ {o:67,l:1,c:'id'},{o:68,l:21,c:'aux'},{o:89,l:2,c:'crc'}
+];
+const CCOL={meta:'#4a5a62',aux:'#3a4a52',id:'#ffb000',pos:'#6fd0e0',time:'#5a6a72',pilot:'#39ff14',home:'#8a7a4a',crc:'#ff3b47'};
+function byteClass(i){for(const f of FIELDS){if(i>=f.o && i<f.o+f.l) return f.c;} return 'aux';}
+
+/* ============ helpers ============ */
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeOut=t=>1-Math.pow(1-t,3);
+const easeInOut=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function fadeEnv(p,inD,outD){ // p 0..1 within scene; returns opacity
+  const fi=clamp(p/inD,0,1); const fo=clamp((1-p)/outD,0,1); return Math.min(easeInOut(fi),easeInOut(fo));
+}
+
+/* ============ build byte grid ============ */
+const grid=$('grid'); const cells=[];
+for(let i=0;i<BYTES.length;i++){
+  const d=document.createElement('div'); d.className='by';
+  const hex=BYTES[i].toString(16).padStart(2,'0');
+  const bin=BYTES[i].toString(2).padStart(8,'0');
+  d.innerHTML='<span class="h">'+hex+'</span><span class="bin">'+bin+'</span>';
+  d.dataset.col=CCOL[byteClass(i)];
+  grid.appendChild(d); cells.push(d);
+}
+
+/* ============ build big scope rings + contacts ============ */
+const bs=$('bigscope');
+[0.28,0.5,0.72,0.94].forEach(r=>{const e=document.createElement('div');e.className='ring';
+  e.style.width=(900*r)+'px';e.style.height=(900*r)+'px';bs.appendChild(e);});
+const ch=document.createElement('div');ch.className='cross';ch.style.cssText='left:50%;top:5%;bottom:5%;width:1px;transform:translateX(-50%)';bs.appendChild(ch);
+const cv=document.createElement('div');cv.className='cross';cv.style.cssText='top:50%;left:5%;right:5%;height:1px;transform:translateY(-50%)';bs.appendChild(cv);
+// 500 fake contacts clustered (one radio, one claimed pos) + scatter, real track separate
+const contacts=$('contacts'); const cts=[];
+let seed=1337; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+for(let i=0;i<220;i++){ // 220 rendered dots representing the 500-id flood (perf)
+  const a=rnd()*Math.PI*2; const rad=50+rnd()*rnd()*520; // cluster toward center claimed pos
+  const cx=50+Math.cos(a)*rad/11.8; const cy=50+Math.sin(a)*rad/11.8;
+  const e=document.createElement('div'); e.className='ct';
+  e.style.left=cx+'%'; e.style.top=cy+'%';
+  e.dataset.a=(rnd()*360); // angle for sweep-trigger
+  contacts.appendChild(e); cts.push(e);
+}
+// real contact position (moving east, upper area)
+const realEl=$('realct');
+function realPos(k){ // k 0..1 along track, returns % in scope
+  return {x:62+k*8, y:40};
+}
+
+/* ============ S2 pin geometry (meters -> scope px, 560 box) ============ */
+// aircraft origin at center-upper; operator ~14m S, ~8m W. scale: 1m ~ 11px
+const SC=11, box=560, cxp=box*0.56, cyp=box*0.40;
+const AIR={x:cxp, y:cyp};
+const PIL={x:cxp-8*SC, y:cyp+14*SC};
+
+/* ============ S5 tak symbol positions ============ */
+
+/* ============ COLD OPEN text ============ */
+const S0TXT="Every drone since 2022 broadcasts who it is, where it is, and where you are standing.";
+const s0txt=$('s0txt');
+
+/* ============ scene schedule (ms) ============ */
+const SCENES=[
+  {el:'s0',start:0,     end:11000},
+  {el:'s1',start:11000, end:24000},
+  {el:'s2',start:24000, end:40000},
+  {el:'s3',start:40000, end:50000},
+  {el:'s4',start:50000, end:66000},
+  {el:'s5',start:66000, end:77000},
+  {el:'s6',start:77000, end:87000},
+];
+const TOTAL=87000;
+// s3 and s4 both use bigscope; keep it mounted across 40000..66000
+const BIGSTART=40000, BIGEND=66000;
+
+/* ============ updaters ============ */
+function updS0(p,t){
+  // type out over first 6.2s, caret blink, then mark reveal
+  const n=Math.floor(clamp(t/6200,0,1)*S0TXT.length);
+  let str=S0TXT.slice(0,n);
+  // highlight phrases once fully typed
+  if(n>=S0TXT.length){
+    str=S0TXT
+      .replace("who it is","<span class='hl'>who it is</span>")
+      .replace("where it is","<span class='hl'>where it is</span>")
+      .replace("where you are standing","<span class='hl2'>where you are standing</span>");
+  }
+  s0txt.innerHTML=str;
+  $('caret').style.opacity=(t<6400? (Math.floor(t/420)%2?0.15:1) : (t<6800?1:0));
+  // mark
+  const mp=clamp((t-7400)/2200,0,1);
+  $('mark').style.opacity=easeOut(mp);
+  $('mark').style.transform='translateY('+lerp(16,0,easeOut(mp))+'px)';
+  $('markrule').style.width=lerp(0,320,easeOut(clamp((t-8200)/2000,0,1)))+'px';
+}
+
+function updS1(p,t){
+  // scan bar sweeps L->R over 2.2s..9.5s, cells lock as the bar passes
+  const gw=grid.getBoundingClientRect().width||1360;
+  const swp=clamp((t-1400)/7600,0,1);
+  const sb=$('scanbar');
+  sb.style.opacity = (t>1200 && t<9400)?1:0;
+  sb.style.left=(swp*100)+'%';
+  const cols=13, rows=Math.ceil(BYTES.length/cols);
+  for(let i=0;i<cells.length;i++){
+    const col=i%cols; const prog=(col+ (Math.floor(i/cols)/rows)*0.0)/cols;
+    const lit = swp >= (col/cols) - 0.02;
+    const c=cells[i];
+    if(lit && !c._lit){ c._lit=true; }
+    if(c._lit){
+      const col2=c.dataset.col;
+      c.style.color=col2; c.style.borderColor=col2+'55';
+      c.style.background='rgba(255,255,255,0.015)';
+      c.style.boxShadow='0 0 10px '+col2+'22';
+      c.querySelector('.bin').style.color=col2+'66';
+    } else {
+      c.style.color='#2a363d'; c.style.borderColor='#0e161d'; c.style.background='#070c11';
+      c.style.boxShadow='none'; c.querySelector('.bin').style.color='#17222a';
+    }
+  }
+  // foot fade in after sweep
+  document.querySelectorAll('#s1 .foot > div').forEach((d,k)=>{
+    d.style.opacity=easeOut(clamp((t-9200-k*300)/900,0,1));
+  });
+  document.querySelector('#s1 .head').style.opacity=easeOut(clamp(t/900,0,1));
+}
+
+function updS2(p,t){
+  // once the operator is located, pull focus: dim the aircraft-side cards, keep the pilot card lit
+  const focus=clamp((t-7600)/900,0,1); // 0..1 as operator resolves
+  // cards resolve one by one
+  document.querySelectorAll('#s2 .fcard').forEach((c,k)=>{
+    const d=clamp((t-500-k*850)/900,0,1);
+    const isPilot=c.classList.contains('pilot');
+    const dim=isPilot?1:lerp(1,0.32,focus);
+    c.style.opacity=easeOut(d)*dim; c.style.transform='translateY('+lerp(14,0,easeOut(d))+'px)';
+  });
+  // scope: aircraft pin first, operator drops later, link draws, oploc
+  const air=$('pinair'), pil=$('pinpil');
+  air.style.left=AIR.x+'px'; air.style.top=AIR.y+'px';
+  pil.style.left=PIL.x+'px'; pil.style.top=PIL.y+'px';
+  const ap=clamp((t-1200)/700,0,1); air.style.opacity=easeOut(ap);
+  // operator drop ~ at t 6800 (after serial+model+pos cards)
+  const pp=clamp((t-7200)/700,0,1);
+  pil.style.opacity=easeOut(pp);
+  pil.style.transform='translate(-50%,-50%) translateY('+lerp(-26,0,easeOut(pp))+'px)';
+  // link line between pins
+  const dx=PIL.x-AIR.x, dy=PIL.y-AIR.y; const len=Math.hypot(dx,dy); const ang=Math.atan2(dy,dx)*180/Math.PI;
+  const lk=$('linkap'); lk.style.left=AIR.x+'px'; lk.style.top=AIR.y+'px';
+  lk.style.transform='rotate('+ang+'deg)'; lk.style.transformOrigin='left center';
+  const lp=clamp((t-8100)/900,0,1);
+  lk.style.width=(len*easeOut(lp))+'px'; lk.style.opacity=lp>0?1:0;
+  // operator located banner
+  const op=clamp((t-9200)/900,0,1);
+  const ol=$('oploc'); ol.style.opacity=easeOut(op);
+  ol.style.transform='translateX(-50%) scale('+lerp(.92,1,easeOut(op))+')';
+  // focus bloom on the operator pin the instant it lands
+  const fl=$('opflash'); const fb=clamp((t-7100)/160,0,1); const fd=clamp((t-7260)/1100,0,1);
+  fl.style.left=PIL.x+'px'; fl.style.top=PIL.y+'px';
+  const flsz=lerp(10,420,easeOut(Math.max(fb,fd)));
+  fl.style.width=flsz+'px'; fl.style.height=flsz+'px';
+  fl.style.opacity=(fb-fd)>0?(fb-fd):0;
+  // pulse ranges
+  const puls=0.5+0.5*Math.sin(t/260);
+  air.querySelector('.rng').style.transform='translate(-50%,-50%) scale('+(0.9+puls*0.25)+')';
+  pil.querySelector('.rng').style.transform='translate(-50%,-50%) scale('+(0.9+puls*0.3)+')';
+  document.querySelector('#s2 .top').style.opacity=easeOut(clamp(t/800,0,1));
+}
+
+function updBig(gt){ // gt = global time; manage bigscope presence 44000..70000
+  const on = gt>=BIGSTART-400 && gt<BIGEND+400;
+  bs.style.display = on?'block':'none';
+  if(!on) return;
+  // during s3 (44-55) zoom in from tiny (continuing the one-drone pullback); s4 full
+  const lt=gt-BIGSTART; // 0.. (26000)
+  // scope opacity: fade in 0..1.4s, hold, fade out last 1.4s before BIGEND
+  const op=fadeEnv(lt/(BIGEND-BIGSTART),0.06,0.06);
+  bs.style.opacity=op;
+  // zoom: start scaled 0.08 (one drone fills frame) expand to 1.0 by ~4s
+  const zoom=lerp(0.1,1.0,easeInOut(clamp(lt/4200,0,1)));
+  bs.style.transform='translate(-50%,-50%) scale('+zoom+')';
+  // contacts appear as we pull back (3000..9000)
+  for(let i=0;i<cts.length;i++){
+    const ap=clamp((lt-2600 - (i%40)*55)/700,0,1);
+    cts[i].style.opacity=0.85*easeOut(ap);
+  }
+  // SWEEP active during s4 (lt>11000). rotate; as it passes a fake, desaturate+shrink
+  const sw=$('sweep');
+  const sweepOn = lt>11000;
+  sw.style.opacity = sweepOn? op*0.9 : 0;
+  if(sweepOn){
+    const ang=((lt-11000)/1000*120)%360; // 3s per rev
+    sw.style.transform='rotate('+ang+'deg)';
+    // collapse fakes: after first full sweep (by lt 14500) fade fakes down to brown cluster
+    const collapse=clamp((lt-13500)/4500,0,1);
+    for(let i=0;i<cts.length;i++){
+      const e=cts[i];
+      // pull toward center claimed pos and desaturate
+      const baseL=parseFloat(e.style.left), baseT=parseFloat(e.style.top);
+      if(!e._b){e._b={l:baseL,t:baseT}; }
+      const tl=lerp(e._b.l,50,collapse*0.7), tt=lerp(e._b.t,50,collapse*0.7);
+      e.style.left=tl+'%'; e.style.top=tt+'%';
+      e.style.background=collapse>0.2?'#6a4428':'#ff3b47';
+      e.style.boxShadow=collapse>0.2?'none':'0 0 6px rgba(255,59,71,.6)';
+      e.style.opacity=(0.85-collapse*0.45)*op;
+      e.style.transform='translate(-50%,-50%) scale('+lerp(1,0.6,collapse)+')';
+    }
+    // real track pulses green, moving
+    const k=clamp((lt-11000)/14000,0,1);
+    const rp=realPos(k);
+    realEl.style.left=rp.x+'%'; realEl.style.top=rp.y+'%';
+    const rop=clamp((lt-12500)/1200,0,1);
+    realEl.style.opacity=easeOut(rop)*op;
+    const pulse=1+0.6*Math.max(0,Math.sin((lt-12500)/300));
+    realEl.querySelector('.p').style.transform='translate(-50%,-50%) scale('+(1+pulse*1.4)+')';
+    realEl.querySelector('.p').style.opacity=clamp(1-(pulse-1),0,1);
+  } else {
+    realEl.style.opacity=0;
+  }
+}
+
+function updS3(p,t){
+  const c=$('s3cap'); c.style.opacity=fadeEnv(p,0.14,0.22);
+  c.style.transform='translateX(-50%) translateY('+lerp(10,0,easeOut(clamp(t/1200,0,1)))+'px)';
+}
+function updS4(p,t){
+  $('s4cap').style.opacity=fadeEnv(p,0.1,0.2);
+  // 500 -> 1 countdown, synced to the sweep collapse (collapse runs ~ t 3.5..8 in S4-local time)
+  const ctr=$('ctr'), ctrn=$('ctrn'), ctrl=$('ctrl');
+  const cin=clamp((t-1200)/700,0,1);            // counter fades in with 500 showing
+  const cout=clamp((t-8200)/700,0,1);           // fades out as verdict takes over
+  ctr.style.opacity=(easeOut(cin)-easeOut(cout))*fadeEnv(p,0.05,0.12);
+  const e=easeInOut(clamp((t-3500)/4100,0,1));   // 0..1 collapse progress
+  const val=Math.max(1,Math.round(lerp(500,1,e)));
+  ctrn.textContent=val;
+  if(val<=1){ ctrn.classList.add('real'); ctrl.textContent='genuine track // one source'; }
+  else { ctrn.classList.remove('real'); ctrl.textContent='broadcasts in the air // one radio'; }
+  ctr.style.transform='translate(-50%,-50%) scale('+lerp(1,1.08,e)+')';
+  // verdict appears after collapse (t ~ 8.5s)
+  const vp=clamp((t-8600)/1100,0,1);
+  const v=$('verdict'); v.style.opacity=easeOut(vp)*fadeEnv(p,0.05,0.14);
+  v.style.transform='translateX(-50%) translateY('+lerp(14,0,easeOut(vp))+'px)';
+}
+
+function updS5(p,t){
+  const panels=['p-tak','p-klv','p-logs'];
+  panels.forEach((id,k)=>{
+    const d=clamp((t-400-k*600)/900,0,1);
+    const el=$(id); el.style.opacity=easeOut(d)*fadeEnv(p,0.05,0.12);
+    el.style.transform='translateY('+lerp(16,0,easeOut(d))+'px)';
+  });
+  // tak symbols snap in
+  const op=$('sym-op'), uas=$('sym-uas');
+  op.style.left='30%'; op.style.top='70%';
+  uas.style.left='64%'; uas.style.top='34%';
+  const sp=clamp((t-1800)/600,0,1); uas.style.opacity=easeOut(sp);
+  uas.style.transform='translate(-50%,-50%) scale('+lerp(1.6,1,easeOut(sp))+')';
+  const sop=clamp((t-2400)/600,0,1); op.style.opacity=easeOut(sop);
+  // tak line
+  const tl=$('takline'); const map=$('takmap');
+  // draw from operator to uas inside map coords (approx using %s), unscaled layout px
+  const ox=0.30, oy=0.70, ux=0.64, uy=0.34;
+  const w=map.offsetWidth||440, h=map.offsetHeight||520;
+  const dx=(ux-ox)*w, dy=(uy-oy)*h; const len=Math.hypot(dx,dy); const ang=Math.atan2(dy,dx)*180/Math.PI;
+  tl.style.left=(ox*100)+'%'; tl.style.top=(oy*100)+'%'; tl.style.transform='rotate('+ang+'deg)';
+  const lp=clamp((t-3000)/800,0,1); tl.style.width=(len*easeOut(lp))+'px'; tl.style.opacity=lp>0?0.9:0;
+  // klv reticle + hud
+  const kp=clamp((t-2600)/800,0,1);
+  document.querySelector('#klv .reticle').style.opacity=easeOut(kp);
+  document.querySelectorAll('#klv .hud').forEach((hd,k)=>{ hd.style.opacity=easeOut(clamp((t-2800-k*220)/700,0,1)); });
+  // reticle drift
+  const dr=Math.sin(t/900)*8;
+  document.querySelector('#klv .reticle').style.transform='translate(calc(-50% + '+dr+'px),-50%)';
+  // logs rows
+  document.querySelectorAll('#logs .lrow').forEach((r,k)=>{ r.style.opacity=easeOut(clamp((t-2600-k*360)/700,0,1)); });
+}
+
+function updS6(p,t){
+  // chip 0..4s, then endcard
+  const cp=clamp(t/1200,0,1);
+  $('chip').style.opacity=easeOut(cp)*clamp((5200-t)/700,0,1);
+  $('chip').style.transform='translateY('+lerp(14,0,easeOut(cp))+'px) scale('+lerp(.96,1,easeOut(cp))+')';
+  $('board').style.opacity=easeOut(clamp((t-1400)/900,0,1));
+  // endcard from ~4.4s
+  const ep=clamp((t-4400)/900,0,1);
+  const ec=$('endcard'); ec.style.opacity=easeOut(ep);
+  document.querySelectorAll('#s6 .crates .cr').forEach((r,k)=>{ r.style.opacity=easeOut(clamp((t-4800-k*260)/700,0,1)); });
+  $('url').style.opacity=easeOut(clamp((t-7000)/900,0,1));
+  $('etag').style.opacity=easeOut(clamp((t-7700)/900,0,1));
+  $('eoss').style.opacity=easeOut(clamp((t-8200)/900,0,1));
+  // final fade to black 9.0..10.0
+  $('fade').style.opacity=clamp((t-9000)/1000,0,1);
+}
+
+/* ============ master clock ============ */
+const UP={s0:updS0,s1:updS1,s2:updS2,s3:updS3,s4:updS4,s5:updS5,s6:updS6};
+let t0=null;
+// private review seek: open with #t=36 to start the timeline at 36s (no hash = normal autoplay from 0)
+const SEEK=(()=>{const m=/[#&]t=(\d+(?:\.\d+)?)/.exec(location.hash);return m?parseFloat(m[1])*1000:0;})();
+function frame(now){
+  if(t0===null)t0=now;
+  let gt=((now-t0)+SEEK)%TOTAL;
+  // fade overlay: default off except handled by s6/global start
+  if(gt<700) $('fade').style.opacity=1-easeInOut(gt/700); // ease from black at loop start
+  else if(gt>77000){/* s6 handles */} else $('fade').style.opacity=0;
+
+  // clock + classification bar
+  $('clbar').style.opacity=clamp((gt-900)/1200,0,1)* (gt>85000?clamp((87000-gt)/1500,0,1):1);
+  $('tcode').style.opacity=$('clbar').style.opacity;
+  const ss=Math.floor(gt/1000); $('clock').textContent='T+'+String(Math.floor(ss/60)).padStart(2,'0')+':'+String(ss%60).padStart(2,'0');
+  $('tcode').textContent='REF 1WNBH3900201N1 // F3411 // '+(gt/1000).toFixed(1)+'s';
+
+  // bigscope persistent across s3/s4
+  updBig(gt);
+
+  for(const s of SCENES){
+    const el=$(s.el);
+    if(gt>=s.start && gt<s.end){
+      el.style.display='block';
+      const p=(gt-s.start)/(s.end-s.start);
+      const lt=gt-s.start;
+      // base scene opacity via fade env (except s0 handled, s6 handled)
+      if(s.el!=='s0'&&s.el!=='s6'&&s.el!=='s3'&&s.el!=='s4') el.style.opacity=fadeEnv(p,0.06,0.08);
+      else if(s.el==='s0') el.style.opacity=fadeEnv(p,0.04,0.09);
+      else if(s.el==='s6') el.style.opacity=1;
+      else el.style.opacity=1; // s3/s4 content faded internally
+      UP[s.el](p,lt);
+    } else {
+      el.style.display='none'; el.style.opacity=0;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============ fit stage to window ============ */
+function fit(){
+  const s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  $('stage').style.transform='scale('+s+')';
+}
+window.addEventListener('resize',fit); fit();
+</script>
+</body>
+</html>
