@@ -1,6 +1,12 @@
 # Tensorust drone stack, live demos
 
-Self-contained, offline static demos of the Tensorust open-source drone crates. Open `index.html` to browse the gallery, or open any demo folder's `index.html` directly. No backend, no build step, no network required.
+**One drone can broadcast 500 fake Remote ID identities to hide in the noise. This collapses the flood back to the single real emitter, in your browser, with no backend.**
+
+![Remote ID spoof-flood collapsing to one real drone](docs/demo.gif)
+
+### [Open the live demos](https://mattbusel.github.io/drone-demos/)
+
+Every decoded field, trust verdict and detection result on this page is produced by the open-source Tensorust Rust crates, run natively against real payloads (including DJI captures from the NDSS 2023 research dataset) and replayed in the browser. The scenarios are simulated so each story reads clearly, but nothing in the decode or the verdicts is faked and no capability is invented. The whole stack is receive-only: there is no transmit path anywhere in this code. The demos are self-contained and offline. Open `index.html` to browse the gallery, or open any demo folder's `index.html` directly. No backend, no build step, no network required.
 
 ## Demos
 
@@ -15,21 +21,21 @@ Self-contained, offline static demos of the Tensorust open-source drone crates. 
 
 Plus byte-level decoders under [`bits/`](bits/): F3411 Basic ID, F3411 Location, DJI DroneID, MAVLink 2, ST 0601 KLV.
 
-## Honest by design
+## Why it is trustworthy
 
-The scenarios are simulated so each story reads clearly. Every decoded field, trust verdict and detection result is produced by the open-source crates themselves, run natively against real payloads (including DJI captures from the NDSS 2023 research dataset) and replayed in the browser. Nothing is faked and no capability is invented.
-
-The stack is receive-only. There is no transmit path anywhere in this code.
+The decoders follow the published standards directly: ASTM F3411 / ASD-STAN prEN 4709-002 for Open Drone ID, MISB ST 0601 for KLV full-motion-video metadata, and the MAVLink 2 / ArduPilot log formats for flight replay. Decode and detection run in the open-source crates themselves, not in hand-written demo glue, so what you see in the browser is the same code you would call in production. The DJI decode is validated against the NDSS 2023 DroneID captures rather than synthetic bytes.
 
 ## Crates
 
-- [remoteid](https://crates.io/crates/remoteid) 0.3.3
-- [remoteid-sentinel](https://crates.io/crates/remoteid-sentinel) 0.1.0
-- [remoteid-scenario](https://crates.io/crates/remoteid-scenario) 0.1.0
-- [uas-cot](https://crates.io/crates/uas-cot) 0.6.0
-- [misb](https://crates.io/crates/misb) 0.4.1
-- [flightlog-core](https://crates.io/crates/flightlog-core) 0.2.0
-- [mavlink-tlog](https://crates.io/crates/mavlink-tlog) 0.1.4
+| Crate | Version | crates.io downloads |
+|-------|---------|---------------------|
+| [remoteid](https://crates.io/crates/remoteid) | 0.3.3 | 5,095 |
+| [remoteid-sentinel](https://crates.io/crates/remoteid-sentinel) | 0.1.0 | new |
+| [remoteid-scenario](https://crates.io/crates/remoteid-scenario) | 0.1.0 | new |
+| [uas-cot](https://crates.io/crates/uas-cot) | 0.6.0 | 101 |
+| [misb](https://crates.io/crates/misb) | 0.4.1 | 275 |
+| [flightlog-core](https://crates.io/crates/flightlog-core) | 0.2.0 | 43 |
+| [mavlink-tlog](https://crates.io/crates/mavlink-tlog) | 0.1.4 | 307 |
 
 ## Credits
 
